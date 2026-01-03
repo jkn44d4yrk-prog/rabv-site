@@ -332,25 +332,30 @@ document.addEventListener("DOMContentLoaded", () => {
    * Start a session with only the starred questions.  If there are no
    * starred questions the user is informed.
    */
-  function startStarReview() {
-    const starredIds = state.starred ? Object.keys(state.starred) : [];
-    if (starredIds.length === 0) {
-      alert("No hay preguntas marcadas para repasar.");
-      return;
-    }
-    const byId = new Map(questions.map(q => [q.id, q]));
-    const qList = [];
-    for (const id of starredIds) {
-      const q = byId.get(id);
-      if (q) qList.push(q);
-    }
-    if (qList.length === 0) {
-      alert("Las preguntas marcadas ya no existen.");
-      return;
-    }
-    startCustomQuestions(qList, "MARCADAS");
+  
+function startStarReview() {
+  const starredIds = state.starred ? Object.keys(state.starred) : [];
+  if (starredIds.length === 0) {
+    alert("No hay preguntas marcadas para repasar.");
+    return;
   }
 
+  // 👇 Map con IDs numéricos
+  const byId = new Map(questions.map(q => [q.id, q]));
+  const qList = [];
+
+  for (const id of starredIds) {
+    const q = byId.get(Number(id)); // ✅ FIX CLAVE
+    if (q) qList.push(q);
+  }
+
+  if (qList.length === 0) {
+    alert("Las preguntas marcadas ya no existen.");
+    return;
+  }
+
+  startCustomQuestions(qList, "MARCADAS");
+}
   /**
    * Search for blocks or questions based on the user's input.  A
    * numeric value is interpreted as a block number (1-based) or
