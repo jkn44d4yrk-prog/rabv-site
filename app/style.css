@@ -23,26 +23,19 @@ body {
   padding: 18px;
 }
 
-/*
- * The heading should wrap a logo next to the title text.  We define
- * the flexbox on the `.title` class itself rather than nesting
- * selectors inside the `h1` rule (which is invalid CSS).  The
- * `title-logo` class controls the size of the icon next to the text.
- */
-.title {
+h1 {
+  .title {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 9px;
 }
 
 .title-logo {
-  width: 36px;
-  height: 36px;
+  width: 31px;
+  height: 31px;
   object-fit: contain;
 }
-
-h1 {
   text-align: center;
   margin: 10px 0 18px;
   font-size: clamp(22px, 2.6vw, 30px);
@@ -281,110 +274,87 @@ button.incorrect {
 #blockMsg button:hover {
   background: rgba(34, 193, 195, 0.24);
 }
+/* ===== Textos legales y avisos ===== */
 
-/* ====== EXTENDED FEATURES ======
- * These classes support the additional functionality such as the
- * statistics panel, search bar, resume button, star review and exam
- * actions.  They are designed to integrate seamlessly with the
- * existing colour scheme and spacing used throughout the app.
- */
-
-/* Panel that shows global statistics (respondidas, correctas,
-   falladas, dominadas y marcadas).  Uses a responsive grid to
-   accommodate varying numbers of items on different screen sizes. */
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.stats-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-}
-.stats-title {
+/* Nota bajo el título (Proyecto educativo...) */
+.site-note {
+  max-width: 680px;
+  margin: 0 auto 18px;
+  text-align: center;
   font-size: 14px;
-  opacity: 0.8;
-}
-.stats-value {
-  font-size: 20px;
-  font-weight: 700;
+  line-height: 1.5;
+  opacity: 0.85;
 }
 
-/* Search input container for quick access to blocks or questions */
-.search-container {
-  margin-bottom: 16px;
+/* Enlaces legales (login y dentro de la app) */
+.legal-links {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 13px;
+  opacity: 0.85;
 }
-.search-input {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.06);
+
+.legal-links a {
   color: var(--text);
-  outline: none;
-}
-.search-input::placeholder {
-  color: rgba(255, 255, 255, 0.55);
-}
-.search-input:focus {
-  border-color: rgba(34, 193, 195, 0.55);
-  box-shadow: 0 0 0 4px rgba(34, 193, 195, 0.20);
+  text-decoration: none;
 }
 
-/* Container for action buttons below the stats and search bar */
-.menu-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
-}
-.menu-actions button {
-  flex: 1 1 auto;
-  white-space: nowrap;
-  background: rgba(255, 255, 255, 0.08);
+.legal-links a:hover {
+  text-decoration: underline;
 }
 
-/* Resume section for continuing where you left off */
-.resume-container {
-  margin-bottom: 16px;
-  display: none;
-}
-.resume-container button {
-  width: 100%;
-  background: rgba(34, 193, 195, 0.18);
-  border-color: rgba(34, 193, 195, 0.38);
-}
-.resume-container button:hover {
-  background: rgba(34, 193, 195, 0.26);
+.legal-links span {
+  margin: 0 6px;
+  opacity: 0.6;
 }
 
-/* Star button displayed next to questions */
-.star-btn {
-  cursor: pointer;
-  background: none;
-  border: none;
-  font-size: 24px;
-  line-height: 1;
-  margin-right: 8px;
-  color: rgba(255, 255, 255, 0.8);
-  transition: transform 0.1s ease;
-}
-.star-btn:hover {
-  transform: scale(1.2);
-}
-.star-btn.starred {
-  color: rgba(252, 211, 77, 0.95);
+/* Versión dentro de la app (abajo del test) */
+.legal-links-inapp {
+  margin-top: 18px;
 }
 
-/* Question header to align the star icon and question text */
-.question-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 14px;
+/* ===== Páginas legales ===== */
+.legal-page {
+  max-width: 860px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px;
+  backdrop-filter: blur(10px);
+}
+
+.legal-page h1 {
+  text-align: center;
+  margin-top: 0;
+}
+
+.legal-page h2 {
+  margin-top: 22px;
+}
+
+.legal-page p,
+.legal-page li {
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.legal-page ul {
+  padding-left: 20px;
+}
+
+.legal-back {
+  text-align: center;
+  margin-top: 26px;
+}
+
+.legal-back a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.legal-back a:hover {
+  text-decoration: underline;
 }
