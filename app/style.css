@@ -388,3 +388,68 @@ button.incorrect {
   align-items: center;
   margin-bottom: 14px;
 }
+/* ===== LEGAL FOOTER ===== */
+.legal-footer {
+  max-width: 860px;
+  margin: 20px auto 0;
+  padding: 14px 16px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.legal-footer a {
+  color: rgba(34, 193, 195, 0.95);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.legal-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ===== LEGAL PAGES ===== */
+.legal-page {
+  max-width: 860px;
+  margin: 40px auto;
+  padding: 24px 26px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.legal-page h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.legal-page h2 {
+  margin-top: 22px;
+}
+
+.legal-page p,
+.legal-page li {
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.legal-page ul {
+  padding-left: 20px;
+}
+
+.legal-back {
+  margin-top: 28px;
+  text-align: center;
+}
+
+.legal-back a {
+  color: rgba(34, 193, 195, 0.95);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.legal-back a:hover {
+  text-decoration: underline;
+}
