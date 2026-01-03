@@ -1,6 +1,5 @@
 :root {
-  /* Fondo base: rojo oscuro menos intenso */
-  --bg: #B91C1C; /* Rojo oscuro para un fondo menos agresivo */
+  --bg: #1a3a2a; /* Fondo verde oscuro */
   --panel: rgba(255, 255, 255, 0.06);
   --stroke: rgba(255, 255, 255, 0.10);
   --text: rgba(255, 255, 255, 0.92);
