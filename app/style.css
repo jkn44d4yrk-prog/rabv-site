@@ -23,15 +23,12 @@ body {
   padding: 18px;
 }
 
-h1 {
-  text-align: center;
-  margin: 10px 0 18px;
-  font-size: clamp(22px, 2.6vw, 30px);
-  letter-spacing: 0.2px;
-}
-
-/* ================== Título con logo ================== */
-/* Ajusta el contenedor del título para mostrar el icono y el texto en línea */
+/*
+ * The heading should wrap a logo next to the title text.  We define
+ * the flexbox on the `.title` class itself rather than nesting
+ * selectors inside the `h1` rule (which is invalid CSS).  The
+ * `title-logo` class controls the size of the icon next to the text.
+ */
 .title {
   display: flex;
   align-items: center;
@@ -39,68 +36,17 @@ h1 {
   gap: 12px;
 }
 
-/* Tamaño del logotipo junto al título */
 .title-logo {
   width: 36px;
   height: 36px;
   object-fit: contain;
 }
 
-/* ================== Panel de estadísticas ================== */
-.stats-panel {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.stats-panel span {
-  display: inline-block;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-/* ================== Contenedor de búsqueda ================== */
-.search-container {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.search-container input {
-  flex: 1;
-  min-width: 160px;
-  max-width: 240px;
-}
-
-/* ================== Contenedor de acciones (examen y marcadas) ================== */
-.menu-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-/* ================== Botón de estrella en las preguntas ================== */
-.star-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.7);
-  margin-left: 8px;
-  padding: 0;
-}
-
-.star-btn.active {
-  color: gold;
+h1 {
+  text-align: center;
+  margin: 10px 0 18px;
+  font-size: clamp(22px, 2.6vw, 30px);
+  letter-spacing: 0.2px;
 }
 
 #login, #menu, #test, #blockMsg {
@@ -164,7 +110,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* ===== MenÃº header ===== */
+/* ===== Menú header ===== */
 .menu-topbar {
   display: flex;
   gap: 10px;
@@ -178,7 +124,7 @@ button:disabled {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* ===== MenÃº por bloque ===== */
+/* ===== Menú por bloque ===== */
 .block-row {
   display: grid;
   grid-template-columns: 1fr auto auto auto auto;
@@ -286,7 +232,7 @@ button:disabled {
   text-align: left;
   padding: 12px 12px;
   background: rgba(255, 255, 255, 0.08);
-  font-size: 17px; /* Aumentado tamaÃ±o de la fuente de las respuestas */
+  font-size: 17px; /* Aumentado tamaño de la fuente de las respuestas */
 }
 
 #options button:hover {
@@ -305,10 +251,10 @@ button:disabled {
   background: rgba(34, 193, 195, 0.33);
 }
 
-/* Respuesta correcta (azul con borde verde neÃ³n y sombra) */
+/* Respuesta correcta (azul con borde verde neón y sombra) */
 button.correct {
-  background: rgba(40, 180, 99, 0.6) !important; /* Azul brillante */
-  border: 2px solid rgba(34, 193, 195, 1) !important; /* Verde neÃ³n */
+  background: rgba(59, 130, 246, 0.6) !important; /* Azul brillante */
+  border: 2px solid rgba(34, 193, 195, 1) !important; /* Verde neón */
   color: rgba(255, 255, 255, 0.98) !important; /* Texto blanco */
   box-shadow: 0 0 8px rgba(34, 193, 195, 0.6); /* Sombra verde */
 }
@@ -334,4 +280,111 @@ button.incorrect {
 
 #blockMsg button:hover {
   background: rgba(34, 193, 195, 0.24);
+}
+
+/* ====== EXTENDED FEATURES ======
+ * These classes support the additional functionality such as the
+ * statistics panel, search bar, resume button, star review and exam
+ * actions.  They are designed to integrate seamlessly with the
+ * existing colour scheme and spacing used throughout the app.
+ */
+
+/* Panel that shows global statistics (respondidas, correctas,
+   falladas, dominadas y marcadas).  Uses a responsive grid to
+   accommodate varying numbers of items on different screen sizes. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+.stats-title {
+  font-size: 14px;
+  opacity: 0.8;
+}
+.stats-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Search input container for quick access to blocks or questions */
+.search-container {
+  margin-bottom: 16px;
+}
+.search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  outline: none;
+}
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+.search-input:focus {
+  border-color: rgba(34, 193, 195, 0.55);
+  box-shadow: 0 0 0 4px rgba(34, 193, 195, 0.20);
+}
+
+/* Container for action buttons below the stats and search bar */
+.menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.menu-actions button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Resume section for continuing where you left off */
+.resume-container {
+  margin-bottom: 16px;
+  display: none;
+}
+.resume-container button {
+  width: 100%;
+  background: rgba(34, 193, 195, 0.18);
+  border-color: rgba(34, 193, 195, 0.38);
+}
+.resume-container button:hover {
+  background: rgba(34, 193, 195, 0.26);
+}
+
+/* Star button displayed next to questions */
+.star-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  margin-right: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  transition: transform 0.1s ease;
+}
+.star-btn:hover {
+  transform: scale(1.2);
+}
+.star-btn.starred {
+  color: rgba(252, 211, 77, 0.95);
+}
+
+/* Question header to align the star icon and question text */
+.question-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
 }

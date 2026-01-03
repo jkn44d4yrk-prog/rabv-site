@@ -32,24 +32,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const MOST_FAILED_COUNT = 40; // ✅ TOP 40 global (o menos si no hay)
 
   // ================= STATE =================
-  let state = { history: [], attempts: {} };
+  // The app keeps track of answered questions (history), number of
+  // attempts per question, starred questions and the last point the
+  // user reached (resume).  The starred and resume properties may
+  // not exist in older saved data, so we normalise them later.
+  let state = { history: [], attempts: {}, starred: {}, resume: null };
   let currentBlock = [];
   let currentIndex = 0;
   let currentSessionTitle = "BLOQUE";
-
-  // ================= EXTRA STATE FOR ADVANCED FEATURES =================
-  // currentStartIndex tracks the starting index of the current block (used for resume)
-  let currentStartIndex = 0;
-  // Set of starred question IDs loaded from localStorage
-  let starred = new Set();
-  try {
-    const storedStar = JSON.parse(localStorage.getItem("starredIds") || "[]");
-    if (Array.isArray(storedStar)) {
-      starred = new Set(storedStar);
-    }
-  } catch (_) {
-    // ignore parse errors
-  }
+  // Additional runtime variables used to build the resume state.  When
+  // starting a block or custom question set we record the start index
+  // and mode so we know how to restore it later.
+  const EXAM_QUESTION_COUNT = 40;
+  let currentBlockStartIndex = null;
+  let currentMode = "NORMAL";
 
   // ================= UI HELPERS =================
   function showLoginError(msg) {
@@ -77,6 +73,12 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       history: Array.isArray(safe.history) ? safe.history : [],
       attempts: safe.attempts && typeof safe.attempts === "object" ? safe.attempts : {},
+      // If the saved data contains starred questions, use it; otherwise
+      // default to an empty object.  We never allow non-object values.
+      starred: safe.starred && typeof safe.starred === "object" ? safe.starred : {},
+      // Resume information stores the last block/question the user was on.
+      // If missing, set to null so no resume button is shown.
+      resume: safe.resume && typeof safe.resume === "object" ? safe.resume : null,
     };
   }
 
@@ -123,131 +125,298 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const id of ids) delete state.attempts[id];
   }
 
-  // ================= STATS & RESUME HELPERS =================
-  // Update the small statistics panel in the menu (answered, correct, incorrect, dominated)
-  function updateStatsPanel() {
-    const panel = document.getElementById("statsPanel");
-    if (!panel) return;
+  // ================= EXTENDED STATS AND ACTIONS =================
+  /**
+   * Count overall statistics based off the stored history.  A
+   * question is considered "dominada" if it was answered correctly
+   * at least twice in a row at any point in its history.  This
+   * function groups attempts per question to determine that streak.
+   *
+   * Returns an object with properties: responded (number of unique
+   * questions answered at least once), correct (number of unique
+   * questions answered correctly on the first attempt), failed
+   * (number of unique questions answered incorrectly on the first
+   * attempt), dominadas (number of questions with two consecutive
+   * correct answers), starred (current count of starred questions).
+   */
+  function countStats() {
     const first = getFirstAttemptsMap();
-    let totalAnswered = first.size;
-    let totalCorrect = 0;
-    let totalIncorrect = 0;
-    for (const q of questions) {
-      const a = first.get(q.id);
-      if (!a) continue;
-      if (a.selected === a.correct) totalCorrect++;
-      else totalIncorrect++;
+    let responded = 0;
+    let correct = 0;
+    let failed = 0;
+
+    // Count unique answered, correct on first attempt and wrong on first attempt
+    for (const [id, att] of first.entries()) {
+      responded++;
+      if (att.selected === att.correct) correct++;
+      else failed++;
     }
-    // Dominadas: preguntas con 3 o más intentos (aprox. dominadas)
-    let dominated = 0;
-    for (const id in state.attempts) {
-      const count = state.attempts[id];
-      if (count >= 3) dominated++;
+
+    // Group all attempts by questionId
+    const byId = {};
+    for (const h of state.history) {
+      if (!h || !h.questionId) continue;
+      if (!byId[h.questionId]) byId[h.questionId] = [];
+      byId[h.questionId].push(h);
     }
-    panel.innerHTML =
-      `<span>Respondidas: ${totalAnswered}/${questions.length}</span>` +
-      `<span>Aciertos: ${totalCorrect}</span>` +
-      `<span>Fallos: ${totalIncorrect}</span>` +
-      `<span>Dominadas: ${dominated}</span>`;
-  }
-
-  // Toggle a question as starred/unstarred and persist to localStorage
-  function toggleStar(qId) {
-    if (starred.has(qId)) {
-      starred.delete(qId);
-    } else {
-      starred.add(qId);
-    }
-    // Persist starred IDs
-    try {
-      localStorage.setItem("starredIds", JSON.stringify(Array.from(starred)));
-    } catch (_) {}
-    updateReviewStarBtn();
-  }
-
-  // Update the "Repasar marcadas" button text and state
-  function updateReviewStarBtn() {
-    const btn = document.getElementById("reviewStarBtn");
-    if (!btn) return;
-    const n = starred.size;
-    btn.textContent = `Repasar marcadas (${n})`;
-    btn.disabled = n === 0;
-  }
-
-  // Store the current question ID for resume purposes
-  function updateResumeInfo(questionId) {
-    if (!questionId) return;
-    try {
-      localStorage.setItem("resumeQuestionId", String(questionId));
-    } catch (_) {}
-  }
-
-  // Resume where the user left off
-  function resume() {
-    const resumeId = localStorage.getItem("resumeQuestionId");
-    if (!resumeId) return;
-    const idx = questions.findIndex(q => String(q.id) === String(resumeId));
-    if (idx < 0) return;
-    const startIndex = Math.floor(idx / BLOCK_SIZE) * BLOCK_SIZE;
-    const localIndex = idx - startIndex;
-    // Start a normal block and then jump to the stored question
-    startBlock(startIndex, "NORMAL");
-    currentIndex = localIndex;
-    loadQuestion();
-  }
-
-  // Search for a block or question based on input value
-  function handleSearch() {
-    const input = document.getElementById("searchInput");
-    if (!input) return;
-    const val = (input.value || "").trim();
-    if (!val) return;
-    // Try numeric first
-    const num = parseInt(val, 10);
-    if (!isNaN(num)) {
-      if (num >= 1 && num <= questions.length) {
-        // go to specific question number
-        const idx = num - 1;
-        const startIndex = Math.floor(idx / BLOCK_SIZE) * BLOCK_SIZE;
-        const localIndex = idx - startIndex;
-        startBlock(startIndex, "NORMAL");
-        currentIndex = localIndex;
-        loadQuestion();
-        return;
+    let dominadas = 0;
+    for (const id in byId) {
+      const arr = byId[id];
+      let streak = 0;
+      let dominated = false;
+      for (const a of arr) {
+        if (a.selected === a.correct) {
+          streak++;
+          if (streak >= 2) {
+            dominated = true;
+            break;
+          }
+        } else {
+          streak = 0;
+        }
       }
+      if (dominated) dominadas++;
+    }
+    const starredCount = state.starred ? Object.keys(state.starred).length : 0;
+    return { responded, correct, failed, dominadas, starred: starredCount };
+  }
+
+  /**
+   * Build and return a statistics panel element based on current data.
+   */
+  function createStatsPanel() {
+    const stats = countStats();
+    const panel = document.createElement("div");
+    panel.className = "stats";
+    const items = [
+      { title: "Respondidas", value: stats.responded },
+      { title: "Acertadas", value: stats.correct },
+      { title: "Falladas", value: stats.failed },
+      { title: "Dominadas", value: stats.dominadas },
+      { title: "Marcadas", value: stats.starred },
+    ];
+    items.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "stats-item";
+      const val = document.createElement("span");
+      val.className = "stats-value";
+      val.textContent = item.value;
+      const tit = document.createElement("span");
+      tit.className = "stats-title";
+      tit.textContent = item.title;
+      div.appendChild(val);
+      div.appendChild(tit);
+      panel.appendChild(div);
+    });
+    return panel;
+  }
+
+  /**
+   * Build and return a resume section.  If state.resume exists and
+   * contains valid data, the section will show a button allowing the
+   * user to continue where they left off.
+   */
+  function createResumeSection() {
+    const container = document.createElement("div");
+    container.className = "resume-container";
+    const resumeInfo = state.resume;
+    if (resumeInfo && typeof resumeInfo === "object") {
+      const btn = document.createElement("button");
+      // Determine display text for the resume button
+      let text = "Continuar";
+      if (resumeInfo.sessionTitle) {
+        text += ` ${resumeInfo.sessionTitle}`;
+      }
+      if (typeof resumeInfo.blockStartIndex === "number" && resumeInfo.blockStartIndex >= 0) {
+        const blockNum = Math.floor(resumeInfo.blockStartIndex / BLOCK_SIZE) + 1;
+        text += ` ${blockNum}`;
+      }
+      if (typeof resumeInfo.currentIndex === "number") {
+        const qNum = resumeInfo.currentIndex + 1;
+        text += ` (pregunta ${qNum})`;
+      }
+      btn.textContent = text;
+      btn.onclick = resume;
+      container.appendChild(btn);
+      container.style.display = "block";
+    }
+    return container;
+  }
+
+  /**
+   * Build and return a search container with an input for searching
+   * blocks or questions.  The input triggers a search when the user
+   * presses Enter.
+   */
+  function createSearchContainer() {
+    const container = document.createElement("div");
+    container.className = "search-container";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = "Buscar bloque, pregunta...";
+    input.className = "search-input";
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        handleSearch(input.value);
+      }
+    });
+    container.appendChild(input);
+    return container;
+  }
+
+  /**
+   * Build and return a container with action buttons for exam and
+   * reviewing starred questions.
+   */
+  function createMenuActions() {
+    const container = document.createElement("div");
+    container.className = "menu-actions";
+    // Exam button
+    const examBtn = document.createElement("button");
+    examBtn.type = "button";
+    examBtn.textContent = `Simulacro (${EXAM_QUESTION_COUNT})`;
+    examBtn.onclick = startExam;
+    container.appendChild(examBtn);
+    // Star review button
+    const starBtn = document.createElement("button");
+    starBtn.type = "button";
+    const starCount = state.starred ? Object.keys(state.starred).length : 0;
+    starBtn.textContent = `Repasar marcadas (${starCount})`;
+    starBtn.disabled = starCount === 0;
+    starBtn.onclick = startStarReview;
+    container.appendChild(starBtn);
+    return container;
+  }
+
+  /**
+   * Toggle the starred state of a question by id.  Updates the
+   * internal state and the star button UI.
+   */
+  function toggleStar(qId) {
+    if (!state.starred) state.starred = {};
+    if (state.starred[qId]) {
+      delete state.starred[qId];
+    } else {
+      state.starred[qId] = true;
+    }
+    updateStarButton(qId);
+  }
+
+  /**
+   * Update the appearance of the star button in the current question
+   * header based on whether the question is starred.  Also update
+   * aria-labels for accessibility.
+   */
+  function updateStarButton(qId) {
+    const btn = questionEl.querySelector(".star-btn");
+    if (!btn) return;
+    const starred = state.starred && state.starred[qId];
+    btn.textContent = starred ? "★" : "☆";
+    if (starred) btn.classList.add("starred");
+    else btn.classList.remove("starred");
+  }
+
+  /**
+   * Start an exam with a fixed number of random questions.  The
+   * questions are selected at random from the full question set.  If
+   * there are fewer than EXAM_QUESTION_COUNT questions, all are used.
+   */
+  function startExam() {
+    // Create a shuffled copy of the questions array
+    const shuffled = questions.slice().sort(() => Math.random() - 0.5);
+    const selected = shuffled.slice(0, EXAM_QUESTION_COUNT);
+    startCustomQuestions(selected, "EXAMEN");
+  }
+
+  /**
+   * Start a session with only the starred questions.  If there are no
+   * starred questions the user is informed.
+   */
+  function startStarReview() {
+    const starredIds = state.starred ? Object.keys(state.starred) : [];
+    if (starredIds.length === 0) {
+      alert("No hay preguntas marcadas para repasar.");
+      return;
+    }
+    const byId = new Map(questions.map(q => [q.id, q]));
+    const qList = [];
+    for (const id of starredIds) {
+      const q = byId.get(id);
+      if (q) qList.push(q);
+    }
+    if (qList.length === 0) {
+      alert("Las preguntas marcadas ya no existen.");
+      return;
+    }
+    startCustomQuestions(qList, "MARCADAS");
+  }
+
+  /**
+   * Search for blocks or questions based on the user's input.  A
+   * numeric value is interpreted as a block number (1-based) or
+   * question index.  Otherwise a free-text search is performed on
+   * question text and option contents.
+   */
+  function handleSearch(term) {
+    if (!term) return;
+    const query = String(term).trim();
+    if (!query) return;
+    const num = parseInt(query, 10);
+    if (!isNaN(num)) {
+      // Determine whether it's a block number or question index
       const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
       if (num >= 1 && num <= numBlocks) {
-        // go to specific block number
-        const startIndex = (num - 1) * BLOCK_SIZE;
-        startBlock(startIndex, "NORMAL");
+        const startIdx = (num - 1) * BLOCK_SIZE;
+        startBlock(startIdx, "NORMAL");
+        return;
+      }
+      if (num >= 1 && num <= questions.length) {
+        const q = questions[num - 1];
+        startCustomQuestions([q], `Pregunta ${num}`);
         return;
       }
     }
-    // Fallback: search by substring in the question text
-    const lc = val.toLowerCase();
-    const index = questions.findIndex(q => q.question && q.question.toLowerCase().includes(lc));
-    if (index >= 0) {
-      const startIndex = Math.floor(index / BLOCK_SIZE) * BLOCK_SIZE;
-      const localIndex = index - startIndex;
-      startBlock(startIndex, "NORMAL");
-      currentIndex = localIndex;
-      loadQuestion();
-    } else {
-      alert("No se encontró ningún bloque o pregunta que coincida.");
+    // Free-text search
+    const termLower = query.toLowerCase();
+    const results = questions.filter(q => {
+      const inQuestion = q.question && q.question.toLowerCase().includes(termLower);
+      const inOptions = Object.values(q.options || {}).some(opt => (opt || "").toLowerCase().includes(termLower));
+      return inQuestion || inOptions;
+    });
+    if (results.length === 0) {
+      alert("No se encontraron preguntas coincidentes.");
+      return;
     }
+    startCustomQuestions(results, `BUSCAR: ${query}`);
   }
 
-  // Start a random exam session of 40 questions
-  function startExam() {
-    const count = Math.min(40, questions.length);
-    const idxs = Array.from({ length: questions.length }, (_, i) => i);
-    // Fisher-Yates shuffle
-    for (let i = idxs.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
+  /**
+   * Continue from the saved resume position.  Restores the last block
+   * and question index.  If there is no valid resume information
+   * nothing happens.
+   */
+  function resume() {
+    const info = state.resume;
+    if (!info || typeof info !== "object") return;
+    // Determine the set of questions to load based on saved mode
+    if (typeof info.blockStartIndex === "number" && info.blockStartIndex >= 0) {
+      // Normal block session
+      currentBlockStartIndex = info.blockStartIndex;
+      currentMode = info.mode || "NORMAL";
+      startBlock(info.blockStartIndex, currentMode);
+    } else if (Array.isArray(info.customQuestions)) {
+      // Custom session saved - not used in this version but kept for
+      // completeness
+      startCustomQuestions(info.customQuestions, info.sessionTitle || "REPASO");
+    } else {
+      return;
     }
-    const selected = idxs.slice(0, count).map(i => questions[i]);
-    startCustomQuestions(selected, "EXAMEN");
+    // After starting block, override currentIndex and sessionTitle
+    if (typeof info.currentIndex === "number" && info.currentIndex >= 0) {
+      currentIndex = info.currentIndex;
+      // reload the saved question instead of the first one
+      loadQuestion();
+    }
   }
 
   // ✅ Top N preguntas más falladas (global, contando todos los intentos)
@@ -403,66 +572,17 @@ document.addEventListener("DOMContentLoaded", () => {
     menuEl.style.display = "block";
 
     menuEl.innerHTML = "";
+    // Top bar (title and logout)
     menuEl.appendChild(renderMenuTopbar());
-
-    // ===== Panel de estadísticas =====
-    const statsDiv = document.createElement("div");
-    statsDiv.id = "statsPanel";
-    statsDiv.className = "stats-panel";
-    menuEl.appendChild(statsDiv);
-    updateStatsPanel();
-
-    // ===== Botón para continuar donde se dejó =====
-    const resumeId = localStorage.getItem("resumeQuestionId");
-    if (resumeId) {
-      const resumeBtn = document.createElement("button");
-      resumeBtn.id = "resumeBtn";
-      resumeBtn.type = "button";
-      resumeBtn.textContent = "Continuar donde lo dejé";
-      resumeBtn.style.marginBottom = "16px";
-      resumeBtn.onclick = resume;
-      menuEl.appendChild(resumeBtn);
-    }
-
-    // ===== Buscador de bloques/preguntas =====
-    const searchDiv = document.createElement("div");
-    searchDiv.className = "search-container";
-    const searchInput = document.createElement("input");
-    searchInput.id = "searchInput";
-    searchInput.type = "text";
-    searchInput.placeholder = "Buscar bloque o pregunta…";
-    const searchBtn = document.createElement("button");
-    searchBtn.id = "searchBtn";
-    searchBtn.type = "button";
-    searchBtn.textContent = "Ir";
-    searchBtn.onclick = handleSearch;
-    searchDiv.appendChild(searchInput);
-    searchDiv.appendChild(searchBtn);
-    menuEl.appendChild(searchDiv);
-
-    // ===== Acciones: examen y marcadas =====
-    const actionsDiv = document.createElement("div");
-    actionsDiv.className = "menu-actions";
-    const examBtn = document.createElement("button");
-    examBtn.id = "examBtn";
-    examBtn.type = "button";
-    examBtn.textContent = "Simulacro (40)";
-    examBtn.onclick = startExam;
-    actionsDiv.appendChild(examBtn);
-    const reviewStarBtn = document.createElement("button");
-    reviewStarBtn.id = "reviewStarBtn";
-    reviewStarBtn.type = "button";
-    reviewStarBtn.textContent = "Repasar marcadas";
-    reviewStarBtn.onclick = () => {
-      const list = questions.filter(q => starred.has(q.id));
-      if (list.length === 0) {
-        alert("No hay preguntas marcadas.");
-        return;
-      }
-      startCustomQuestions(list, "MARCADAS");
-    };
-    actionsDiv.appendChild(reviewStarBtn);
-    menuEl.appendChild(actionsDiv);
+    // Optional resume button
+    const resumeSection = createResumeSection();
+    if (resumeSection) menuEl.appendChild(resumeSection);
+    // Global statistics panel
+    menuEl.appendChild(createStatsPanel());
+    // Search bar
+    menuEl.appendChild(createSearchContainer());
+    // Additional actions (exam and review starred)
+    menuEl.appendChild(createMenuActions());
 
     const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
     const first = getFirstAttemptsMap();
@@ -543,16 +663,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     menuEl.appendChild(renderMenuFooter());
-
-    // Actualiza panel de estadísticas y botón de marcadas según el estado actual
-    updateStatsPanel();
-    updateReviewStarBtn();
   }
 
   // ================= SESIONES DE PREGUNTAS =================
   function startBlock(startIndex, mode) {
     currentSessionTitle = "BLOQUE";
-    currentStartIndex = startIndex;
+    currentBlockStartIndex = startIndex;
+    currentMode = mode;
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -571,8 +688,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function startCustomQuestions(qs, title) {
     currentSessionTitle = title || "REPASO";
-    // custom sessions do not belong to a fixed block
-    currentStartIndex = -1;
+    currentBlockStartIndex = -1;
+    currentMode = "CUSTOM";
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -591,28 +708,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function loadQuestion() {
     const q = currentBlock[currentIndex];
-    // Render question text and star button
-    questionEl.textContent = "";
-    const qSpan = document.createElement("span");
-    qSpan.textContent = q.question;
-    questionEl.appendChild(qSpan);
-    // star button
+    // Render question header with star icon
+    questionEl.innerHTML = "";
+    const headerDiv = document.createElement("div");
+    headerDiv.className = "question-header";
+    // Star button
     const starBtn = document.createElement("button");
+    starBtn.type = "button";
     starBtn.className = "star-btn";
-    const isStarred = starred.has(q.id);
-    starBtn.innerHTML = isStarred ? "★" : "☆";
-    if (isStarred) starBtn.classList.add("active");
-    starBtn.onclick = () => {
-      toggleStar(q.id);
-      const active = starred.has(q.id);
-      starBtn.innerHTML = active ? "★" : "☆";
-      if (active) starBtn.classList.add("active");
-      else starBtn.classList.remove("active");
-    };
-    questionEl.appendChild(starBtn);
-
-    // Update resume info
-    updateResumeInfo(q.id);
+    const isStarred = state.starred && state.starred[q.id];
+    starBtn.textContent = isStarred ? "★" : "☆";
+    if (isStarred) starBtn.classList.add("starred");
+    starBtn.onclick = () => toggleStar(q.id);
+    headerDiv.appendChild(starBtn);
+    // Question text
+    const textSpan = document.createElement("span");
+    textSpan.textContent = q.question;
+    headerDiv.appendChild(textSpan);
+    questionEl.appendChild(headerDiv);
 
     optionsEl.innerHTML = "";
     nextBtn.disabled = true;
@@ -646,6 +759,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     state.attempts[qId] = (state.attempts[qId] || 0) + 1;
     nextBtn.disabled = false;
+
+    // Update resume information so the user can continue at this point
+    state.resume = {
+      blockStartIndex: currentBlockStartIndex,
+      currentIndex: currentIndex,
+      sessionTitle: currentSessionTitle,
+      mode: currentMode,
+    };
   }
 
   if (backToMenuBtn) {
@@ -658,8 +779,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
   nextBtn.onclick = async () => {
     currentIndex++;
+    // If we've moved to the next question, update resume to reflect the new index
+    if (currentIndex < currentBlock.length) {
+      state.resume = {
+        blockStartIndex: currentBlockStartIndex,
+        currentIndex: currentIndex,
+        sessionTitle: currentSessionTitle,
+        mode: currentMode,
+      };
+    }
 
     if (currentIndex >= currentBlock.length) {
+      // End of session: clear resume so it does not offer to continue
+      state.resume = null;
       testEl.style.display = "none";
       blockMsgEl.style.display = "block";
       blockMsgEl.innerHTML = `
@@ -673,10 +805,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const user = auth.currentUser;
     if (user) await saveProgress(user);
-
-    // After progress save, update stats panel and review-star button (if visible)
-    updateStatsPanel();
-    updateReviewStarBtn();
   };
 
   // ================= AUTH STATE =================
@@ -699,23 +827,36 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ================= KEYBOARD SHORTCUTS =================
-  // Atajos de teclado globales:
-  // N → siguiente pregunta, B → volver al menú,
-  // R → repetir más falladas, C → continuar donde lo dejaste
+  // Provide keyboard shortcuts for quicker navigation.  The shortcuts
+  // only trigger when the focus is not inside an input field.  Keys:
+  //  n/N – next question (in a test session)
+  //  b/B – return to menu (while in a test session)
+  //  r/R – repeat most failed questions
+  //  c/C – continue from resume
   document.addEventListener("keydown", (ev) => {
     const tag = ev.target && ev.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
-    const key = ev.key.toLowerCase();
+    const key = ev.key && ev.key.toLowerCase();
     if (key === "n") {
-      if (nextBtn && !nextBtn.disabled) nextBtn.click();
+      // Next question
+      if (testEl.style.display === "block" && !nextBtn.disabled) {
+        nextBtn.click();
+      }
     } else if (key === "b") {
-      if (backToMenuBtn) backToMenuBtn.click();
+      // Back to menu
+      if (testEl.style.display === "block") {
+        backToMenuBtn && backToMenuBtn.click();
+      }
     } else if (key === "r") {
-      const btn = document.getElementById("repeatMostFailedBtn");
-      if (btn && !btn.disabled) btn.click();
+      // Repeat most failed questions
+      const repeatBtn = document.getElementById("repeatMostFailedBtn");
+      if (repeatBtn && !repeatBtn.disabled) repeatBtn.click();
     } else if (key === "c") {
-      const btn = document.getElementById("resumeBtn");
-      if (btn) btn.click();
+      // Continue from resume
+      const resumeBtn = document.querySelector(".resume-container button");
+      if (resumeBtn && resumeBtn.offsetParent !== null) {
+        resumeBtn.click();
+      }
     }
   });
 
