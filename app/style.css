@@ -1,5 +1,6 @@
 :root {
-  --bg: #1a3a2a; /* Fondo verde oscuro */
+  /* Fondo base: rojo oscuro menos intenso */
+  --bg: #B91C1C; /* Rojo oscuro para un fondo menos agresivo */
   --panel: rgba(255, 255, 255, 0.06);
   --stroke: rgba(255, 255, 255, 0.10);
   --text: rgba(255, 255, 255, 0.92);
@@ -24,22 +25,83 @@ body {
 }
 
 h1 {
-  .title {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-}
-
-.title-logo {
-  width: 31px;
-  height: 31px;
-  object-fit: contain;
-}
   text-align: center;
   margin: 10px 0 18px;
   font-size: clamp(22px, 2.6vw, 30px);
   letter-spacing: 0.2px;
+}
+
+/* ================== Título con logo ================== */
+/* Ajusta el contenedor del título para mostrar el icono y el texto en línea */
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* Tamaño del logotipo junto al título */
+.title-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+/* ================== Panel de estadísticas ================== */
+.stats-panel {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.stats-panel span {
+  display: inline-block;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ================== Contenedor de búsqueda ================== */
+.search-container {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.search-container input {
+  flex: 1;
+  min-width: 160px;
+  max-width: 240px;
+}
+
+/* ================== Contenedor de acciones (examen y marcadas) ================== */
+.menu-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+/* ================== Botón de estrella en las preguntas ================== */
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: 8px;
+  padding: 0;
+}
+
+.star-btn.active {
+  color: gold;
 }
 
 #login, #menu, #test, #blockMsg {
@@ -103,7 +165,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-/* ===== Menú header ===== */
+/* ===== MenÃº header ===== */
 .menu-topbar {
   display: flex;
   gap: 10px;
@@ -117,7 +179,7 @@ button:disabled {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* ===== Menú por bloque ===== */
+/* ===== MenÃº por bloque ===== */
 .block-row {
   display: grid;
   grid-template-columns: 1fr auto auto auto auto;
@@ -225,7 +287,7 @@ button:disabled {
   text-align: left;
   padding: 12px 12px;
   background: rgba(255, 255, 255, 0.08);
-  font-size: 17px; /* Aumentado tamaño de la fuente de las respuestas */
+  font-size: 17px; /* Aumentado tamaÃ±o de la fuente de las respuestas */
 }
 
 #options button:hover {
@@ -244,10 +306,10 @@ button:disabled {
   background: rgba(34, 193, 195, 0.33);
 }
 
-/* Respuesta correcta (azul con borde verde neón y sombra) */
+/* Respuesta correcta (azul con borde verde neÃ³n y sombra) */
 button.correct {
-  background: rgba(59, 130, 246, 0.6) !important; /* Azul brillante */
-  border: 2px solid rgba(34, 193, 195, 1) !important; /* Verde neón */
+  background: rgba(40, 180, 99, 0.6) !important; /* Azul brillante */
+  border: 2px solid rgba(34, 193, 195, 1) !important; /* Verde neÃ³n */
   color: rgba(255, 255, 255, 0.98) !important; /* Texto blanco */
   box-shadow: 0 0 8px rgba(34, 193, 195, 0.6); /* Sombra verde */
 }
@@ -273,88 +335,4 @@ button.incorrect {
 
 #blockMsg button:hover {
   background: rgba(34, 193, 195, 0.24);
-}
-/* ===== Textos legales y avisos ===== */
-
-/* Nota bajo el título (Proyecto educativo...) */
-.site-note {
-  max-width: 680px;
-  margin: 0 auto 18px;
-  text-align: center;
-  font-size: 14px;
-  line-height: 1.5;
-  opacity: 0.85;
-}
-
-/* Enlaces legales (login y dentro de la app) */
-.legal-links {
-  margin-top: 14px;
-  text-align: center;
-  font-size: 13px;
-  opacity: 0.85;
-}
-
-.legal-links a {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.legal-links a:hover {
-  text-decoration: underline;
-}
-
-.legal-links span {
-  margin: 0 6px;
-  opacity: 0.6;
-}
-
-/* Versión dentro de la app (abajo del test) */
-.legal-links-inapp {
-  margin-top: 18px;
-}
-
-/* ===== Páginas legales ===== */
-.legal-page {
-  max-width: 860px;
-  margin: 0 auto;
-  background: var(--panel);
-  border: 1px solid var(--stroke);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 22px;
-  backdrop-filter: blur(10px);
-}
-
-.legal-page h1 {
-  text-align: center;
-  margin-top: 0;
-}
-
-.legal-page h2 {
-  margin-top: 22px;
-}
-
-.legal-page p,
-.legal-page li {
-  line-height: 1.6;
-  font-size: 15px;
-}
-
-.legal-page ul {
-  padding-left: 20px;
-}
-
-.legal-back {
-  text-align: center;
-  margin-top: 26px;
-}
-
-.legal-back a {
-  color: var(--text);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.legal-back a:hover {
-  text-decoration: underline;
 }
