@@ -2,44 +2,29 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>2026</title>
+  <title>Outlook</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Señales útiles para reducir falsos positivos (Safe Browsing) -->
-  <meta name="description" content="Proyecto educativo personal. Acceso restringido.">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-
-  <link rel="stylesheet" href="style.css?v=4">
-
-  <!-- Favicon and Apple icons: load PNG first and fall back to JPEG -->
-  <link rel="icon" href="apple-touch-icon.png" type="image/png">
+  
+  <!-- Agregar el favicon aquí -->
+  <!-- Use the provided JPEG icon for the favicon -->
   <link rel="icon" href="apple-touch-icon.jpeg" type="image/jpeg">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="apple-touch-icon" href="apple-touch-icon.jpeg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.jpeg"> <!-- Ícono para dispositivos Apple -->
+
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 
-<h1 class="title">
-  <!-- Intenta cargar el icono PNG; si no existe, usa el JPEG de fallback -->
-  <img src="apple-touch-icon.png" alt="Logo" class="title-logo" onerror="this.onerror=null;this.src='apple-touch-icon.jpeg';">
-  2026
-</h1>
-
-<p class="site-note">
-  Proyecto educativo personal. Acceso restringido. No es un servicio público ni comercial.
-</p>
+    <!-- Heading with logo and title -->
+    <h1 class="title">
+      <img src="apple-touch-icon.jpeg" alt="Outlook" class="title-logo">
+      Outlook
+    </h1>
 
 <div id="login">
   <input id="email" type="email" placeholder="Email" autocomplete="email">
   <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password">
   <div id="loginError" style="margin-top:10px; color:#ffb4b4; display:none;"></div>
   <button onclick="login()">Entrar</button>
-
-  <div class="legal-links">
-    <a href="aviso-legal.html">Aviso legal</a>
-    <span>·</span>
-    <a href="politica-privacidad.html">Política de privacidad</a>
-  </div>
 </div>
 
 <div id="menu" style="display:none"></div>
@@ -53,12 +38,6 @@
   <h2 id="question"></h2>
   <div id="options"></div>
   <button id="nextBtn" disabled>Siguiente</button>
-
-  <div class="legal-links legal-links-inapp">
-    <a href="aviso-legal.html">Aviso legal</a>
-    <span>·</span>
-    <a href="politica-privacidad.html">Política de privacidad</a>
-  </div>
 </div>
 
 <div id="blockMsg" style="display:none"></div>
@@ -69,12 +48,12 @@
 
 <script>
   const firebaseConfig = {
-    apiKey: "AIzaSyBg6x6x0BS1m9ysIsk-ADAn0QM_8z0dddI",
-    authDomain: "test-2026-d2d80.firebaseapp.com",
-    projectId: "test-2026-d2d80",
-    storageBucket: "test-2026-d2d80.firebasestorage.app",
-    messagingSenderId: "711197555818",
-    appId: "1:711197555818:web:76cc8993337e1085b09e13"
+  apiKey: "AIzaSyBzFCuI63T9eoEAqjcUD43c5zG99hPFKms",
+  authDomain: "outlook-3a951.firebaseapp.com",
+  projectId: "outlook-3a951",
+  storageBucket: "outlook-3a951.firebasestorage.app",
+  messagingSenderId: "242691869386",
+  appId: "1:242691869386:web:c2e51e2c8ec62a1ff64233",
   };
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
