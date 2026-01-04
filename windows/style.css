@@ -1,0 +1,457 @@
+:root {
+  --bg: #071a2b; /* Azul oscuro tipo Windows 11 */
+  --panel: rgba(255, 255, 255, 0.07);
+  --stroke: rgba(255, 255, 255, 0.12);
+  --text: rgba(255, 255, 255, 0.92);
+  --shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
+  --radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 800px at 20% 15%, rgba(0, 120, 212, 0.30), transparent 60%),  /* azul Win11 */
+    radial-gradient(900px 700px at 85% 20%, rgba(80, 200, 255, 0.22), transparent 55%),   /* cian suave */
+    radial-gradient(800px 700px at 45% 95%, rgba(120, 140, 255, 0.16), transparent 55%),  /* violeta leve */
+    radial-gradient(700px 600px at 70% 70%, rgba(0, 180, 255, 0.10), transparent 60%),    /* brillo extra */
+    var(--bg);
+  min-height: 100vh;
+  padding: 18px;
+}
+
+/*
+ * The heading should wrap a logo next to the title text.  We define
+ * the flexbox on the `.title` class itself rather than nesting
+ * selectors inside the `h1` rule (which is invalid CSS).  The
+ * `title-logo` class controls the size of the icon next to the text.
+ */
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.title-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+h1 {
+  text-align: center;
+  margin: 10px 0 18px;
+  font-size: clamp(22px, 2.6vw, 30px);
+  letter-spacing: 0.2px;
+}
+
+#login, #menu, #test, #blockMsg {
+  max-width: 860px;
+  margin: 0 auto 16px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  backdrop-filter: blur(10px);
+}
+
+#menu h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+input {
+  width: 100%;
+  padding: 12px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  outline: none;
+  margin: 6px 0;
+}
+
+input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+input:focus {
+  border-color: rgba(34, 193, 195, 0.55);
+  box-shadow: 0 0 0 4px rgba(34, 193, 195, 0.20);
+}
+
+button {
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--text);
+  padding: 11px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  font-weight: 600;
+}
+
+button:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ===== Menú header ===== */
+.menu-topbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+#logoutBtn {
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ===== Menú por bloque ===== */
+.block-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto auto;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.block-main {
+  width: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.block-percent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 130px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 800;
+  color: var(--text);
+}
+
+.block-percent.pct-good {
+  background: rgba(34, 193, 195, 0.18);
+  border-color: rgba(34, 193, 195, 0.40);
+}
+
+.block-percent.pct-mid {
+  background: rgba(40, 180, 99, 0.16);
+  border-color: rgba(40, 180, 99, 0.40);
+}
+
+.block-percent.pct-bad {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.42);
+}
+
+.block-percent.pct-none {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.block-mini {
+  white-space: nowrap;
+}
+
+.block-reset {
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 840px) {
+  .block-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .block-percent {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+/* ===== Test ===== */
+.test-topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+#backToMenuBtn, #logoutBtnTest {
+  background: rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  #backToMenuBtn, #logoutBtnTest {
+    width: 100%;
+  }
+}
+
+#question {
+  font-size: 20px;
+  line-height: 1.25;
+  margin: 0 0 14px;
+}
+
+#options {
+  display: grid;
+  gap: 10px;
+}
+
+#options button {
+  width: 100%;
+  text-align: left;
+  padding: 12px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 17px; /* Aumentado tamaño de la fuente de las respuestas */
+}
+
+#options button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+#nextBtn {
+  margin-top: 14px;
+  width: 100%;
+  padding: 12px;
+  background: rgba(34, 193, 195, 0.26);
+  border-color: rgba(34, 193, 195, 0.40);
+}
+
+#nextBtn:hover {
+  background: rgba(34, 193, 195, 0.33);
+}
+
+/* Respuesta correcta (azul con borde verde neón y sombra) */
+button.correct {
+  background: rgba(59, 130, 246, 0.6) !important; /* Azul brillante */
+  border: 2px solid rgba(34, 193, 195, 1) !important; /* Verde neón */
+  color: rgba(255, 255, 255, 0.98) !important; /* Texto blanco */
+  box-shadow: 0 0 8px rgba(34, 193, 195, 0.6); /* Sombra verde */
+}
+
+/* Respuesta incorrecta (rojo brillante con borde rojo intenso y sombra) */
+button.incorrect {
+  background: rgba(239, 68, 68, 0.6) !important; /* Rojo brillante */
+  border: 2px solid rgba(239, 68, 68, 1) !important; /* Rojo intenso */
+  color: rgba(255, 255, 255, 0.98) !important; /* Texto blanco */
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); /* Sombra roja */
+}
+
+#blockMsg h2 {
+  margin: 0 0 12px;
+}
+
+#blockMsg button {
+  width: 100%;
+  padding: 12px;
+  background: rgba(34, 193, 195, 0.18);
+  border-color: rgba(34, 193, 195, 0.38);
+}
+
+#blockMsg button:hover {
+  background: rgba(34, 193, 195, 0.24);
+}
+
+/* ====== EXTENDED FEATURES ======
+ * These classes support the additional functionality such as the
+ * statistics panel, search bar, resume button, star review and exam
+ * actions.  They are designed to integrate seamlessly with the
+ * existing colour scheme and spacing used throughout the app.
+ */
+
+/* Panel that shows global statistics (respondidas, correctas,
+   falladas, dominadas y marcadas).  Uses a responsive grid to
+   accommodate varying numbers of items on different screen sizes. */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stats-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+.stats-title {
+  font-size: 14px;
+  opacity: 0.8;
+}
+.stats-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* Search input container for quick access to blocks or questions */
+.search-container {
+  margin-bottom: 16px;
+}
+.search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  outline: none;
+}
+.search-input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+.search-input:focus {
+  border-color: rgba(34, 193, 195, 0.55);
+  box-shadow: 0 0 0 4px rgba(34, 193, 195, 0.20);
+}
+
+/* Container for action buttons below the stats and search bar */
+.menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.menu-actions button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Resume section for continuing where you left off */
+.resume-container {
+  margin-bottom: 16px;
+  display: none;
+}
+.resume-container button {
+  width: 100%;
+  background: rgba(34, 193, 195, 0.18);
+  border-color: rgba(34, 193, 195, 0.38);
+}
+.resume-container button:hover {
+  background: rgba(34, 193, 195, 0.26);
+}
+
+/* Star button displayed next to questions */
+.star-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  margin-right: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  transition: transform 0.1s ease;
+}
+.star-btn:hover {
+  transform: scale(1.2);
+}
+.star-btn.starred {
+  color: rgba(252, 211, 77, 0.95);
+}
+
+/* Question header to align the star icon and question text */
+.question-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+}
+/* ===== LEGAL FOOTER ===== */
+.legal-footer {
+  max-width: 860px;
+  margin: 20px auto 0;
+  padding: 14px 16px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+.legal-footer a {
+  color: rgba(34, 193, 195, 0.95);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.legal-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ===== LEGAL PAGES ===== */
+.legal-page {
+  max-width: 860px;
+  margin: 40px auto;
+  padding: 24px 26px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.legal-page h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.legal-page h2 {
+  margin-top: 22px;
+}
+
+.legal-page p,
+.legal-page li {
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.legal-page ul {
+  padding-left: 20px;
+}
+
+.legal-back {
+  margin-top: 28px;
+  text-align: center;
+}
+
+.legal-back a {
+  color: rgba(34, 193, 195, 0.95);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.legal-back a:hover {
+  text-decoration: underline;
+}
