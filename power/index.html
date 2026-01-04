@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>OUTLOOK</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="style.css?v=3">
+
+  <!-- Favicon and Apple icons: load PNG first and fall back to JPEG -->
+  <link rel="icon" href="apple-touch-icon.png" type="image/png">
+  <link rel="icon" href="apple-touch-icon.jpeg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.jpeg">
+</head>
+  <footer class="legal-footer">
+  <p>
+    Proyecto educativo personal. Acceso restringido. No es un servicio público ni comercial.
+  </p>
+  <p>
+    <a href="aviso-legal.html">Aviso legal</a> ·
+    <a href="politica-privacidad.html">Política de privacidad</a>
+  </p>
+</footer>
+<body>
+
+<h1 class="title">
+  <!-- Intenta cargar el icono PNG; si no existe, usa el JPEG de fallback -->
+  <img src="apple-touch-icon.png" alt="Logo" class="title-logo" onerror="this.onerror=null;this.src='apple-touch-icon.jpeg';">
+  OUTLOOK
+</h1>
+
+<div id="login">
+  <input id="email" type="email" placeholder="Email" autocomplete="email">
+  <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password">
+  <div id="loginError" style="margin-top:10px; color:#ffb4b4; display:none;"></div>
+  <button onclick="login()">Entrar</button>
+</div>
+
+<div id="menu" style="display:none"></div>
+
+<div id="test" style="display:none">
+  <div class="test-topbar">
+    <button id="backToMenuBtn" type="button">← Menú</button>
+    <button id="logoutBtnTest" type="button">Cerrar sesión</button>
+  </div>
+
+  <h2 id="question"></h2>
+  <div id="options"></div>
+  <button id="nextBtn" disabled>Siguiente</button>
+</div>
+
+<div id="blockMsg" style="display:none"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBzFCuI63T9eoEAqjcUD43c5zG99hPFKms",
+  authDomain: "outlook-3a951.firebaseapp.com",
+  projectId: "outlook-3a951",
+  storageBucket: "outlook-3a951.firebasestorage.app",
+  messagingSenderId: "242691869386",
+  appId: "1:242691869386:web:c2e51e2c8ec62a1ff64233",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+</script>
+
+<script src="questions.js?v=3"></script>
+<script src="app.js?v=3"></script>
+
+</body>
+</html>
