@@ -73,8 +73,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       history: Array.isArray(safe.history) ? safe.history : [],
       attempts: safe.attempts && typeof safe.attempts === "object" ? safe.attempts : {},
+      // If the saved data contains starred questions, use it; otherwise
+      // default to an empty object.  We never allow non-object values.
       starred: safe.starred && typeof safe.starred === "object" ? safe.starred : {},
-      demotedFailed: safe.demotedFailed && typeof safe.demotedFailed === "object" ? safe.demotedFailed : {},
+      // Resume information stores the last block/question the user was on.
+      // If missing, set to null so no resume button is shown.
       resume: safe.resume && typeof safe.resume === "object" ? safe.resume : null,
     };
   }
@@ -85,34 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!first.has(h.questionId)) first.set(h.questionId, h);
     }
     return first;
-  
-
-// Agrupa el historial por pregunta (questionId) en orden cronológico (inserción).
-function buildAttemptsById() {
-  const byId = {};
-  for (const h of state.history) {
-    if (!h || !h.questionId) continue;
-    if (!byId[h.questionId]) byId[h.questionId] = [];
-    byId[h.questionId].push(h);
   }
-  return byId;
-}
-
-// "Aprendida" = 3 aciertos seguidos en cualquier momento del historial de esa pregunta.
-function isLearned(questionId, attemptsById) {
-  const arr = attemptsById && attemptsById[questionId] ? attemptsById[questionId] : [];
-  let streak = 0;
-  for (const a of arr) {
-    if (a && a.selected === a.correct) {
-      streak++;
-      if (streak >= 3) return true;
-    } else {
-      streak = 0;
-    }
-  }
-  return false;
-}
-}
 
   function getBlockQuestions(startIndex) {
     return questions.slice(startIndex, startIndex + BLOCK_SIZE);
@@ -121,32 +97,21 @@ function isLearned(questionId, attemptsById) {
   function getQuestionsForMode(startIndex, mode) {
     const blockQs = getBlockQuestions(startIndex);
     const first = getFirstAttemptsMap();
-    const attemptsById = buildAttemptsById();
 
     if (mode === "NORMAL") return blockQs;
 
-    // Falladas = (primer intento incorrecto OR degradada desde "a la primera") y AÚN NO aprendida
     if (mode === "FAILED") {
       return blockQs.filter(q => {
         const a = first.get(q.id);
-        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
-        const firstWrong = !!(a && a.selected !== a.correct);
-        return (firstWrong || demoted) && !isLearned(q.id, attemptsById);
+        return a && a.selected !== a.correct;
       });
     }
 
-    // Acertadas al primer intento = primer intento correcto Y NO degradada a fallada
     if (mode === "FIRST_OK") {
       return blockQs.filter(q => {
         const a = first.get(q.id);
-        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
-        return a && a.selected === a.correct && !demoted;
+        return a && a.selected === a.correct;
       });
-    }
-
-    // Aprendidas = 3 aciertos seguidos (modo solo lectura)
-    if (mode === "LEARNED") {
-      return blockQs.filter(q => isLearned(q.id, attemptsById));
     }
 
     return [];
@@ -157,10 +122,7 @@ function isLearned(questionId, attemptsById) {
     const ids = new Set(blockQuestions.map(q => q.id));
 
     state.history = state.history.filter(h => !ids.has(h.questionId));
-    for (const id of ids) {
-      delete state.attempts[id];
-      if (state.demotedFailed) delete state.demotedFailed[id];
-    }
+    for (const id of ids) delete state.attempts[id];
   }
 
   // ================= EXTENDED STATS AND ACTIONS =================
@@ -179,58 +141,44 @@ function isLearned(questionId, attemptsById) {
    */
   function countStats() {
     const first = getFirstAttemptsMap();
-    const attemptsById = buildAttemptsById();
-
     let responded = 0;
-    let firstOk = 0;      // "a la primera" (pero si se degrada a fallada, deja de contarse aquí)
-    let firstWrong = 0;
+    let correct = 0;
+    let failed = 0;
 
+    // Count unique answered, correct on first attempt and wrong on first attempt
     for (const [id, att] of first.entries()) {
       responded++;
-
-      const demoted = !!(state.demotedFailed && state.demotedFailed[id]);
-
-      if (att.selected === att.correct && !demoted) firstOk++;
-      else if (att.selected !== att.correct) firstWrong++;
-      else if (att.selected === att.correct && demoted) {
-        // Fue correcta al primer intento, pero se degradó por fallarla en repaso
-        // (no suma en firstOk)
-      }
+      if (att.selected === att.correct) correct++;
+      else failed++;
     }
 
-    // Aprendidas (3 aciertos seguidos)
-    let learned = 0;
-    for (const id in attemptsById) {
-      if (isLearned(id, attemptsById)) learned++;
+    // Group all attempts by questionId
+    const byId = {};
+    for (const h of state.history) {
+      if (!h || !h.questionId) continue;
+      if (!byId[h.questionId]) byId[h.questionId] = [];
+      byId[h.questionId].push(h);
     }
-
-    // Falladas "pendientes" = (primer intento mal OR degradada) y NO aprendida
-    let failedPending = 0;
-    for (const [id, att] of first.entries()) {
-      const demoted = !!(state.demotedFailed && state.demotedFailed[id]);
-      const firstWrongHere = att.selected !== att.correct;
-      if ((firstWrongHere || demoted) && !isLearned(id, attemptsById)) failedPending++;
-    }
-
-    // Dominadas = al menos 2 aciertos seguidos en algún momento
     let dominadas = 0;
-    for (const id in attemptsById) {
-      const arr = attemptsById[id];
+    for (const id in byId) {
+      const arr = byId[id];
       let streak = 0;
       let dominated = false;
       for (const a of arr) {
         if (a.selected === a.correct) {
           streak++;
-          if (streak >= 2) { dominated = true; break; }
+          if (streak >= 2) {
+            dominated = true;
+            break;
+          }
         } else {
           streak = 0;
         }
       }
       if (dominated) dominadas++;
     }
-
     const starredCount = state.starred ? Object.keys(state.starred).length : 0;
-    return { responded, correct: firstOk, failed: failedPending, dominadas, learned, starred: starredCount };
+    return { responded, correct, failed, dominadas, starred: starredCount };
   }
 
   /**
@@ -384,25 +332,30 @@ function isLearned(questionId, attemptsById) {
    * Start a session with only the starred questions.  If there are no
    * starred questions the user is informed.
    */
-  function startStarReview() {
-    const starredIds = state.starred ? Object.keys(state.starred) : [];
-    if (starredIds.length === 0) {
-      alert("No hay preguntas marcadas para repasar.");
-      return;
-    }
-    const byId = new Map(questions.map(q => [q.id, q]));
-    const qList = [];
-    for (const id of starredIds) {
-      const q = byId.get(id);
-      if (q) qList.push(q);
-    }
-    if (qList.length === 0) {
-      alert("Las preguntas marcadas ya no existen.");
-      return;
-    }
-    startCustomQuestions(qList, "MARCADAS");
+  
+function startStarReview() {
+  const starredIds = state.starred ? Object.keys(state.starred) : [];
+  if (starredIds.length === 0) {
+    alert("No hay preguntas marcadas para repasar.");
+    return;
   }
 
+  // 👇 Map con IDs numéricos
+  const byId = new Map(questions.map(q => [q.id, q]));
+  const qList = [];
+
+  for (const id of starredIds) {
+    const q = byId.get(Number(id)); // ✅ FIX CLAVE
+    if (q) qList.push(q);
+  }
+
+  if (qList.length === 0) {
+    alert("Las preguntas marcadas ya no existen.");
+    return;
+  }
+
+  startCustomQuestions(qList, "MARCADAS");
+}
   /**
    * Search for blocks or questions based on the user's input.  A
    * numeric value is interpreted as a block number (1-based) or
@@ -638,7 +591,6 @@ function isLearned(questionId, attemptsById) {
 
     const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
     const first = getFirstAttemptsMap();
-    const attemptsById = buildAttemptsById();
 
     for (let i = 0; i < numBlocks; i++) {
       const startIndex = i * BLOCK_SIZE;
@@ -647,38 +599,19 @@ function isLearned(questionId, attemptsById) {
 
       const blockQuestions = getBlockQuestions(startIndex);
 
-      let firstOkCount = 0;          // acertadas al primer intento (y no degradadas)
-      let failedPendingCount = 0;    // falladas actuales (primer intento mal OR degradadas) y NO aprendidas
-      let recoveredCount = 0;        // (para el %): falladas que ya están aprendidas
-      let learnedCount = 0;          // aprendidas (3 seguidas)
+      let correctCount = 0;
+      let failedCount = 0;
       let answeredCount = 0;
 
       for (const q of blockQuestions) {
         const a = first.get(q.id);
-        const learned = isLearned(q.id, attemptsById);
-        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
-
-        if (learned) learnedCount++;
-
-        if (!a && !demoted) continue; // si no hay primer intento y no está degradada, no cuenta como respondida
+        if (!a) continue;
         answeredCount++;
-
-        const firstWasCorrect = !!(a && a.selected === a.correct);
-        const firstWasWrong = !!(a && a.selected !== a.correct);
-
-        if (firstWasCorrect && !demoted) {
-          firstOkCount++;
-        }
-
-        const isFailedNow = (firstWasWrong || demoted) && !learned;
-        if (isFailedNow) failedPendingCount++;
-
-        if ((firstWasWrong || demoted) && learned) recoveredCount++;
+        if (a.selected === a.correct) correctCount++;
+        else failedCount++;
       }
 
-      // Para el % del bloque: cuenta como correctas las "a la primera" + las que fueron falladas pero ya aprendidas
-      const correctNowCount = firstOkCount + recoveredCount;
-      const percent = Math.round((correctNowCount / blockQuestions.length) * 100);
+      const percent = Math.round((correctCount / blockQuestions.length) * 100);
 
       const row = document.createElement("div");
       row.className = "block-row";
@@ -690,7 +623,7 @@ function isLearned(questionId, attemptsById) {
 
       const percentEl = document.createElement("span");
       percentEl.className = "block-percent";
-      percentEl.textContent = `${correctNowCount}/${blockQuestions.length} (${percent}%)`;
+      percentEl.textContent = `${correctCount}/${blockQuestions.length} (${percent}%)`;
 
       if (answeredCount === 0) percentEl.classList.add("pct-none");
       else if (percent >= 80) percentEl.classList.add("pct-good");
@@ -699,14 +632,14 @@ function isLearned(questionId, attemptsById) {
 
       const failedBtn = document.createElement("button");
       failedBtn.className = "block-mini";
-      failedBtn.textContent = `Rehacer falladas (${failedPendingCount})`;
-      failedBtn.disabled = failedPendingCount === 0;
+      failedBtn.textContent = `Rehacer falladas (${failedCount})`;
+      failedBtn.disabled = failedCount === 0;
       failedBtn.onclick = () => startBlock(startIndex, "FAILED");
 
       const firstOkBtn = document.createElement("button");
       firstOkBtn.className = "block-mini";
-      firstOkBtn.textContent = `Rehacer acertadas al primer intento (${firstOkCount})`;
-      firstOkBtn.disabled = firstOkCount === 0;
+      firstOkBtn.textContent = `Rehacer acertadas (${correctCount})`;
+      firstOkBtn.disabled = correctCount === 0;
       firstOkBtn.onclick = () => startBlock(startIndex, "FIRST_OK");
 
       const resetBtn = document.createElement("button");
@@ -828,12 +761,6 @@ function isLearned(questionId, attemptsById) {
       correct,
       date: new Date().toISOString()
     });
-
-    // Si estás en "Rehacer acertadas al primer intento" y la fallas, pasa a formar parte de FALLADAS
-    if (currentMode === "FIRST_OK" && selected !== correct) {
-      if (!state.demotedFailed) state.demotedFailed = {};
-      state.demotedFailed[qId] = true;
-    }
 
     state.attempts[qId] = (state.attempts[qId] || 0) + 1;
     nextBtn.disabled = false;
