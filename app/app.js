@@ -63,7 +63,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // ================= HELPERS =================
   function normalizeState(loaded) {
     const safe = loaded && typeof loaded === "object" ? loaded : {};
-
     const history = Array.isArray(safe.history) ? safe.history : [];
 
     // failCounts puede no existir en estados antiguos. Si falta, lo reconstruimos desde history.
@@ -174,8 +173,6 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const id of ids) delete state.attempts[id];
     for (const id of ids) delete state.starred[id];
     for (const id of ids) delete state.demotedFailed[id];
-    for (const id of ids) delete state.failCounts[id];
-    for (const id of ids) delete state.starSuppressed[id];
   }
 
   // ================= STATS =================
@@ -334,15 +331,14 @@ document.addEventListener("DOMContentLoaded", () => {
     state.starSuppressed ||= {};
 
     if (state.starred[qId]) {
-      // Si el usuario desmarca manualmente, evitamos que se vuelva a auto-marcar.
+      // Si el usuario desmarca manualmente, evitamos que se vuelva a auto-marcar automáticamente.
       delete state.starred[qId];
       state.starSuppressed[qId] = true;
     } else {
-      // Si el usuario marca manualmente, permitimos auto-marcado futuro si lo desea.
+      // Si marca manualmente, permitimos auto-marcado futuro (si así lo deseas).
       state.starred[qId] = true;
       delete state.starSuppressed[qId];
     }
-
     updateStarButton(qId);
   }
 
@@ -826,15 +822,14 @@ document.addEventListener("DOMContentLoaded", () => {
       date: new Date().toISOString()
     });
 
-    // Contabilizar fallos acumulados por pregunta (en cualquier momento)
+    // Contar fallos totales (cualquier momento). Al llegar a 3, auto-marcar con estrella
+    // (aunque haya aciertos entre medias). Si el usuario la desmarca manualmente, no se auto-marca de nuevo.
     state.failCounts ||= {};
+    state.starred ||= {};
+    state.starSuppressed ||= {};
+
     if (selected !== correct) {
       state.failCounts[qId] = (state.failCounts[qId] || 0) + 1;
-
-      // Auto-marcar con estrella al llegar a 3 fallos (aunque haya aciertos entre medias).
-      // Si el usuario la desmarcó manualmente, no se vuelve a auto-marcar.
-      state.starred ||= {};
-      state.starSuppressed ||= {};
       if (state.failCounts[qId] >= 3 && !state.starred[qId] && !state.starSuppressed[qId]) {
         state.starred[qId] = true;
         updateStarButton(qId);
@@ -846,6 +841,10 @@ document.addEventListener("DOMContentLoaded", () => {
       state.demotedFailed ||= {};
       state.demotedFailed[qId] = true;
     }
+
+    // Guardar inmediatamente (por si el usuario hace navegación/gesto del navegador)
+    const u = auth.currentUser;
+    if (u) { saveProgress(u); }
 
     state.attempts[qId] = (state.attempts[qId] || 0) + 1;
     nextBtn.disabled = false;
@@ -895,7 +894,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (user) await saveProgress(user);
   };
 
-  // ================= ATAJOS (TECLADO) + SWIPES (MÓVIL) =================
+  // ================= AUTH STATE =================
+  auth.onAuthStateChanged(async user => {
+    if (!user) {
+      showLoginScreen();
+      return;
+    }
+
+    if (!isAuthorized(user)) {
+      await auth.signOut();
+      showLoginScreen();
+      showLoginError("No autorizado.");
+      return;
+    }
+
+    loginEl.style.display = "none";
+    await loadProgress(user);
+    showMenu();
+  });
+
+
+  // ================= ATAJOS TECLADO + SWIPE =================
   function isTestVisible() {
     return testEl && testEl.style.display === "block";
   }
@@ -911,12 +930,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Teclado:
-  // - Enter => Siguiente (solo si está habilitado)
-  // - A/B/C/D => seleccionar opción (solo si aún no se respondió)
+  // - Enter => siguiente (si está habilitado)
+  // - A/B/C/D => seleccionar respuesta (si aún no se respondió)
   document.addEventListener("keydown", (ev) => {
     const tag = ev.target && ev.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
-
     if (!isTestVisible()) return;
 
     const key = (ev.key || "").toLowerCase();
@@ -926,16 +944,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Selección rápida de respuestas
     if (currentMode !== "LEARNED" && nextBtn.disabled && ["a", "b", "c", "d"].includes(key)) {
       const letter = key.toUpperCase();
       clickOptionLetter(letter);
+      return;
     }
   });
 
   // Swipe:
-  // - Derecha => Siguiente (si está habilitado)
-  // - Izquierda => Volver al menú
+  // - Derecha => siguiente (si está habilitado)
+  // - Izquierda => volver al menú
   let touchStartX = 0;
   let touchStartY = 0;
 
@@ -959,33 +977,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
 
       if (dx > 0) {
-        // Swipe derecha => siguiente
+        // Derecha
         if (!nextBtn.disabled) nextBtn.click();
       } else {
-        // Swipe izquierda => menú
+        // Izquierda
         if (backToMenuBtn) backToMenuBtn.click();
       }
     }, { passive: true });
   }
-
-
-  // ================= AUTH STATE =================
-  auth.onAuthStateChanged(async user => {
-    if (!user) {
-      showLoginScreen();
-      return;
-    }
-
-    if (!isAuthorized(user)) {
-      await auth.signOut();
-      showLoginScreen();
-      showLoginError("No autorizado.");
-      return;
-    }
-
-    loginEl.style.display = "none";
-    await loadProgress(user);
-    showMenu();
-  });
 
 });
