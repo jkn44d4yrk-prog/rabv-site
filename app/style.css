@@ -161,11 +161,6 @@ button:disabled {
   border-color: rgba(34, 193, 195, 0.40);
 }
 
-.block-percent.pct-mid {
-  background: rgba(40, 180, 99, 0.16);
-  border-color: rgba(40, 180, 99, 0.40);
-}
-
 .block-percent.pct-bad {
   background: rgba(239, 68, 68, 0.16);
   border-color: rgba(239, 68, 68, 0.42);
