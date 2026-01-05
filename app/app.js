@@ -73,11 +73,8 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       history: Array.isArray(safe.history) ? safe.history : [],
       attempts: safe.attempts && typeof safe.attempts === "object" ? safe.attempts : {},
-      // If the saved data contains starred questions, use it; otherwise
-      // default to an empty object.  We never allow non-object values.
       starred: safe.starred && typeof safe.starred === "object" ? safe.starred : {},
-      // Resume information stores the last block/question the user was on.
-      // If missing, set to null so no resume button is shown.
+      demotedFailed: safe.demotedFailed && typeof safe.demotedFailed === "object" ? safe.demotedFailed : {},
       resume: safe.resume && typeof safe.resume === "object" ? safe.resume : null,
     };
   }
@@ -88,35 +85,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!first.has(h.questionId)) first.set(h.questionId, h);
     }
     return first;
-  }
-
-  // ======== APRENDIDAS (3 aciertos seguidos) ========
-  function buildAttemptsById() {
-    const byId = {};
-    for (const h of state.history) {
-      if (!h || !h.questionId) continue;
-      if (!byId[h.questionId]) byId[h.questionId] = [];
-      byId[h.questionId].push(h);
-    }
-    return byId;
-  }
-
-  // Se considera "aprendida" si en su historial existe una racha de 3 aciertos seguidos.
-  // Una vez aprendida, se mantiene como aprendida (aunque luego se falle otra vez).
-  function isLearned(qId, attemptsById) {
-    const arr = attemptsById && attemptsById[qId];
-    if (!arr || arr.length === 0) return false;
-
-    let streak = 0;
-    for (const a of arr) {
-      if (a.selected === a.correct) {
-        streak++;
-        if (streak >= 3) return true;
-      } else {
-        streak = 0;
-      }
-    }
-    return false;
   }
 
   function getBlockQuestions(startIndex) {
@@ -130,19 +98,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (mode === "NORMAL") return blockQs;
 
-    // Falladas = primer intento incorrecto y AÚN NO aprendidas
+    // Falladas = (primer intento incorrecto OR degradada desde "a la primera") y AÚN NO aprendida
     if (mode === "FAILED") {
       return blockQs.filter(q => {
         const a = first.get(q.id);
-        return a && a.selected !== a.correct && !isLearned(q.id, attemptsById);
+        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
+        const firstWrong = !!(a && a.selected !== a.correct);
+        return (firstWrong || demoted) && !isLearned(q.id, attemptsById);
       });
     }
 
-    // Acertadas al primer intento = primer intento correcto (solo eso)
+    // Acertadas al primer intento = primer intento correcto Y NO degradada a fallada
     if (mode === "FIRST_OK") {
       return blockQs.filter(q => {
         const a = first.get(q.id);
-        return a && a.selected === a.correct;
+        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
+        return a && a.selected === a.correct && !demoted;
       });
     }
 
@@ -154,9 +125,14 @@ document.addEventListener("DOMContentLoaded", () => {
     return [];
   }
 
-  function getLearnedQuestionsAll() {
-    const attemptsById = buildAttemptsById();
-    return questions.filter(q => isLearned(q.id, attemptsById));
+    if (mode === "FIRST_OK") {
+      return blockQs.filter(q => {
+        const a = first.get(q.id);
+        return a && a.selected === a.correct;
+      });
+    }
+
+    return [];
   }
 
   function resetBlockData(startIndex) {
@@ -186,14 +162,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const attemptsById = buildAttemptsById();
 
     let responded = 0;
-    let firstOk = 0;
+    let firstOk = 0;      // "a la primera" (pero si se degrada a fallada, deja de contarse aquí)
     let firstWrong = 0;
 
-    // Respondidas + acertadas/falladas al primer intento
     for (const [id, att] of first.entries()) {
       responded++;
-      if (att.selected === att.correct) firstOk++;
-      else firstWrong++;
+
+      const demoted = !!(state.demotedFailed && state.demotedFailed[id]);
+
+      if (att.selected === att.correct && !demoted) firstOk++;
+      else if (att.selected !== att.correct) firstWrong++;
+      else if (att.selected === att.correct && demoted) {
+        // Fue correcta al primer intento, pero se degradó por fallarla en repaso
+        // (no suma en firstOk)
+      }
     }
 
     // Aprendidas (3 aciertos seguidos)
@@ -202,17 +184,45 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isLearned(id, attemptsById)) learned++;
     }
 
-    // Falladas "pendientes" = primer intento mal, pero si ya está aprendida deja de contar como fallada
-    let recoveredFromFailed = 0;
+    // Falladas "pendientes" = (primer intento mal OR degradada) y NO aprendida
+    let failedPending = 0;
     for (const [id, att] of first.entries()) {
-      if (att.selected !== att.correct && isLearned(id, attemptsById)) recoveredFromFailed++;
+      const demoted = !!(state.demotedFailed && state.demotedFailed[id]);
+      const firstWrongHere = att.selected !== att.correct;
+      if ((firstWrongHere || demoted) && !isLearned(id, attemptsById)) failedPending++;
     }
-    const failedPending = Math.max(0, firstWrong - recoveredFromFailed);
 
     // Dominadas = al menos 2 aciertos seguidos en algún momento
     let dominadas = 0;
     for (const id in attemptsById) {
       const arr = attemptsById[id];
+      let streak = 0;
+      let dominated = false;
+      for (const a of arr) {
+        if (a.selected === a.correct) {
+          streak++;
+          if (streak >= 2) { dominated = true; break; }
+        } else {
+          streak = 0;
+        }
+      }
+      if (dominated) dominadas++;
+    }
+
+    const starredCount = state.starred ? Object.keys(state.starred).length : 0;
+    return { responded, firstOk, failed: failedPending, dominadas, learned, starred: starredCount };
+  }
+
+    // Group all attempts by questionId
+    const byId = {};
+    for (const h of state.history) {
+      if (!h || !h.questionId) continue;
+      if (!byId[h.questionId]) byId[h.questionId] = [];
+      byId[h.questionId].push(h);
+    }
+    let dominadas = 0;
+    for (const id in byId) {
+      const arr = byId[id];
       let streak = 0;
       let dominated = false;
       for (const a of arr) {
@@ -228,9 +238,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (dominated) dominadas++;
     }
-
     const starredCount = state.starred ? Object.keys(state.starred).length : 0;
-    return { responded, firstOk, failed: failedPending, dominadas, learned, starred: starredCount };
+    return { responded, correct, failed, dominadas, starred: starredCount };
   }
 
   /**
@@ -240,16 +249,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const stats = countStats();
     const panel = document.createElement("div");
     panel.className = "stats";
-
     const items = [
       { title: "Respondidas", value: stats.responded },
-      { title: "A la primera", value: stats.firstOk },
-      { title: "Aprendidas (3 seguidas)", value: stats.learned },
+      { title: "Acertadas", value: stats.correct },
       { title: "Falladas", value: stats.failed },
       { title: "Dominadas", value: stats.dominadas },
       { title: "Marcadas", value: stats.starred },
     ];
-
     items.forEach(item => {
       const div = document.createElement("div");
       div.className = "stats-item";
@@ -263,7 +269,6 @@ document.addEventListener("DOMContentLoaded", () => {
       div.appendChild(tit);
       panel.appendChild(div);
     });
-
     return panel;
   }
 
@@ -327,14 +332,12 @@ document.addEventListener("DOMContentLoaded", () => {
   function createMenuActions() {
     const container = document.createElement("div");
     container.className = "menu-actions";
-
     // Exam button
     const examBtn = document.createElement("button");
     examBtn.type = "button";
     examBtn.textContent = `Simulacro (${EXAM_QUESTION_COUNT})`;
     examBtn.onclick = startExam;
     container.appendChild(examBtn);
-
     // Star review button
     const starBtn = document.createElement("button");
     starBtn.type = "button";
@@ -343,16 +346,6 @@ document.addEventListener("DOMContentLoaded", () => {
     starBtn.disabled = starCount === 0;
     starBtn.onclick = startStarReview;
     container.appendChild(starBtn);
-
-    // Learned view button (global)
-    const learnedQs = getLearnedQuestionsAll();
-    const learnedBtn = document.createElement("button");
-    learnedBtn.type = "button";
-    learnedBtn.textContent = `Ver aprendidas (${learnedQs.length})`;
-    learnedBtn.disabled = learnedQs.length === 0;
-    learnedBtn.onclick = () => startCustomQuestions(learnedQs, "APRENDIDAS", "LEARNED");
-    container.appendChild(learnedBtn);
-
     return container;
   }
 
@@ -400,30 +393,25 @@ document.addEventListener("DOMContentLoaded", () => {
    * Start a session with only the starred questions.  If there are no
    * starred questions the user is informed.
    */
-  
-function startStarReview() {
-  const starredIds = state.starred ? Object.keys(state.starred) : [];
-  if (starredIds.length === 0) {
-    alert("No hay preguntas marcadas para repasar.");
-    return;
+  function startStarReview() {
+    const starredIds = state.starred ? Object.keys(state.starred) : [];
+    if (starredIds.length === 0) {
+      alert("No hay preguntas marcadas para repasar.");
+      return;
+    }
+    const byId = new Map(questions.map(q => [q.id, q]));
+    const qList = [];
+    for (const id of starredIds) {
+      const q = byId.get(id);
+      if (q) qList.push(q);
+    }
+    if (qList.length === 0) {
+      alert("Las preguntas marcadas ya no existen.");
+      return;
+    }
+    startCustomQuestions(qList, "MARCADAS");
   }
 
-  // 👇 Map con IDs numéricos
-  const byId = new Map(questions.map(q => [q.id, q]));
-  const qList = [];
-
-  for (const id of starredIds) {
-    const q = byId.get(Number(id)); // ✅ FIX CLAVE
-    if (q) qList.push(q);
-  }
-
-  if (qList.length === 0) {
-    alert("Las preguntas marcadas ya no existen.");
-    return;
-  }
-
-  startCustomQuestions(qList, "MARCADAS");
-}
   /**
    * Search for blocks or questions based on the user's input.  A
    * numeric value is interpreted as a block number (1-based) or
@@ -654,12 +642,11 @@ function startStarReview() {
     menuEl.appendChild(createStatsPanel());
     // Search bar
     menuEl.appendChild(createSearchContainer());
-    // Additional actions (exam, marked, learned)
+    // Additional actions (exam and review starred)
     menuEl.appendChild(createMenuActions());
 
     const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
     const first = getFirstAttemptsMap();
-    const attemptsById = buildAttemptsById();
 
     for (let i = 0; i < numBlocks; i++) {
       const startIndex = i * BLOCK_SIZE;
@@ -668,30 +655,36 @@ function startStarReview() {
 
       const blockQuestions = getBlockQuestions(startIndex);
 
-      let firstOkCount = 0;          // acertadas al primer intento
-      let failedPendingCount = 0;    // falladas al primer intento y NO aprendidas
-      let recoveredCount = 0;        // falladas al primer intento pero ya aprendidas (3 seguidas)
+      let firstOkCount = 0;          // acertadas al primer intento (y no degradadas)
+      let failedPendingCount = 0;    // falladas actuales (primer intento mal OR degradadas) y NO aprendidas
+      let recoveredCount = 0;        // (para el %): falladas que ya están aprendidas
       let learnedCount = 0;          // aprendidas (3 seguidas)
       let answeredCount = 0;
 
       for (const q of blockQuestions) {
         const a = first.get(q.id);
         const learned = isLearned(q.id, attemptsById);
+        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
 
         if (learned) learnedCount++;
 
-        if (!a) continue;
+        if (!a && !demoted) continue; // si no hay primer intento y no está degradada, no cuenta como respondida
         answeredCount++;
 
-        if (a.selected === a.correct) {
+        const firstWasCorrect = !!(a && a.selected === a.correct);
+        const firstWasWrong = !!(a && a.selected !== a.correct);
+
+        if (firstWasCorrect && !demoted) {
           firstOkCount++;
-        } else {
-          if (learned) recoveredCount++;
-          else failedPendingCount++;
         }
+
+        const isFailedNow = (firstWasWrong || demoted) && !learned;
+        if (isFailedNow) failedPendingCount++;
+
+        if ((firstWasWrong || demoted) && learned) recoveredCount++;
       }
 
-      // "Acertadas actuales" = acertadas al primer intento + recuperadas (aprendidas tras fallar)
+      // Para el % del bloque: cuenta como correctas las "a la primera" + las que fueron falladas pero ya aprendidas
       const correctNowCount = firstOkCount + recoveredCount;
       const percent = Math.round((correctNowCount / blockQuestions.length) * 100);
 
@@ -724,12 +717,6 @@ function startStarReview() {
       firstOkBtn.disabled = firstOkCount === 0;
       firstOkBtn.onclick = () => startBlock(startIndex, "FIRST_OK");
 
-      const learnedBtn = document.createElement("button");
-      learnedBtn.className = "block-mini";
-      learnedBtn.textContent = `Ver aprendidas (${learnedCount})`;
-      learnedBtn.disabled = learnedCount === 0;
-      learnedBtn.onclick = () => startBlock(startIndex, "LEARNED");
-
       const resetBtn = document.createElement("button");
       resetBtn.className = "block-reset";
       resetBtn.textContent = "Reset";
@@ -750,7 +737,6 @@ function startStarReview() {
       row.appendChild(percentEl);
       row.appendChild(failedBtn);
       row.appendChild(firstOkBtn);
-      row.appendChild(learnedBtn);
       row.appendChild(resetBtn);
 
       menuEl.appendChild(row);
@@ -761,14 +747,9 @@ function startStarReview() {
 
   // ================= SESIONES DE PREGUNTAS =================
   function startBlock(startIndex, mode) {
-    if (mode === "FAILED") currentSessionTitle = "FALLADAS";
-    else if (mode === "FIRST_OK") currentSessionTitle = "ACERTADAS (1er intento)";
-    else if (mode === "LEARNED") currentSessionTitle = "APRENDIDAS";
-    else currentSessionTitle = "BLOQUE";
-
+    currentSessionTitle = "BLOQUE";
     currentBlockStartIndex = startIndex;
     currentMode = mode;
-
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -777,27 +758,18 @@ function startStarReview() {
     currentBlock = getQuestionsForMode(startIndex, mode);
 
     if (currentBlock.length === 0) {
-      alert("No hay preguntas para este bloque/modo.");
+      alert("No hay preguntas para este bloque.");
       showMenu();
       return;
     }
 
-    // Guardar punto de reanudación también para el modo APRENDIDAS (no hay 'answer')
-    state.resume = {
-      blockStartIndex: currentBlockStartIndex,
-      currentIndex: currentIndex,
-      sessionTitle: currentSessionTitle,
-      mode: currentMode,
-    };
-
     loadQuestion();
   }
 
-  function startCustomQuestions(qs, title, modeOverride) {
+  function startCustomQuestions(qs, title) {
     currentSessionTitle = title || "REPASO";
     currentBlockStartIndex = -1;
-    currentMode = modeOverride || "CUSTOM";
-
+    currentMode = "CUSTOM";
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -811,25 +783,15 @@ function startStarReview() {
       return;
     }
 
-    // En sesiones custom también dejamos el resume preparado (si en el futuro lo activas)
-    state.resume = {
-      blockStartIndex: currentBlockStartIndex,
-      currentIndex: currentIndex,
-      sessionTitle: currentSessionTitle,
-      mode: currentMode,
-    };
-
     loadQuestion();
   }
 
   function loadQuestion() {
     const q = currentBlock[currentIndex];
-
     // Render question header with star icon
     questionEl.innerHTML = "";
     const headerDiv = document.createElement("div");
     headerDiv.className = "question-header";
-
     // Star button
     const starBtn = document.createElement("button");
     starBtn.type = "button";
@@ -839,30 +801,13 @@ function startStarReview() {
     if (isStarred) starBtn.classList.add("starred");
     starBtn.onclick = () => toggleStar(q.id);
     headerDiv.appendChild(starBtn);
-
     // Question text
     const textSpan = document.createElement("span");
     textSpan.textContent = q.question;
     headerDiv.appendChild(textSpan);
-
     questionEl.appendChild(headerDiv);
 
     optionsEl.innerHTML = "";
-
-    // Modo APRENDIDAS: solo mostrar la respuesta correcta (sin botones)
-    if (currentMode === "LEARNED") {
-      const correctLetter = q.correct;
-      const correctText = (q.options && q.options[correctLetter]) ? q.options[correctLetter] : "";
-      const box = document.createElement("div");
-      box.className = "learned-answer";
-      box.textContent = `Respuesta correcta: ${correctLetter}) ${correctText}`;
-      optionsEl.appendChild(box);
-
-      nextBtn.disabled = false;
-      return;
-    }
-
-    // Modos normales: elegir respuesta
     nextBtn.disabled = true;
 
     Object.entries(q.options).forEach(([letter, text]) => {
@@ -891,6 +836,12 @@ function startStarReview() {
       correct,
       date: new Date().toISOString()
     });
+
+    // Si estás en "Rehacer acertadas al primer intento" y la fallas, pasa a formar parte de FALLADAS
+    if (currentMode === "FIRST_OK" && selected !== correct) {
+      if (!state.demotedFailed) state.demotedFailed = {};
+      state.demotedFailed[qId] = true;
+    }
 
     state.attempts[qId] = (state.attempts[qId] || 0) + 1;
     nextBtn.disabled = false;
