@@ -127,7 +127,7 @@ button:disabled {
 /* ===== Menú por bloque ===== */
 .block-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto auto;
   gap: 10px;
   align-items: center;
   margin: 10px 0;
@@ -225,6 +225,16 @@ button:disabled {
 #options {
   display: grid;
   gap: 10px;
+}
+
+/* Modo "Aprendidas": muestra solo la respuesta correcta */
+.learned-answer {
+  padding: 14px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 17px;
+  line-height: 1.35;
 }
 
 #options button {
