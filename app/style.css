@@ -127,7 +127,7 @@ button:disabled {
 /* ===== Menú por bloque ===== */
 .block-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto auto;
   gap: 10px;
   align-items: center;
   margin: 10px 0;
@@ -193,6 +193,41 @@ button:disabled {
   .block-percent {
     grid-column: 1 / -1;
     justify-self: start;
+  }
+}
+
+
+/* ===== Ajuste móvil: evitar desencuadres en botones largos ===== */
+@media (max-width: 520px) {
+  .block-row {
+    grid-template-columns: 1fr;   /* 1 columna */
+    gap: 8px;
+  }
+
+  /* Que cada elemento ocupe todo el ancho */
+  .block-row > * {
+    width: 100%;
+  }
+
+  /* El % no necesita min-width en móvil */
+  .block-percent {
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  /* Permitir que el texto se parta en 2 líneas */
+  .block-mini,
+  .block-reset {
+    white-space: normal;   /* sobrescribe el nowrap */
+    line-height: 1.15;
+  }
+
+  /* Un pelín más compacto */
+  .block-mini,
+  .block-reset,
+  .block-main {
+    padding: 10px 12px;
+    font-size: 14px;
   }
 }
 
