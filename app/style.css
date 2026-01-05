@@ -157,8 +157,8 @@ button:disabled {
 }
 
 .block-percent.pct-good {
-  background: rgba(40, 180, 99, 0.18);
-  border-color: rgba(40, 180, 99, 0.45);
+  background: rgba(34, 193, 195, 0.18);
+  border-color: rgba(34, 193, 195, 0.40);
 }
 
 .block-percent.pct-mid {
