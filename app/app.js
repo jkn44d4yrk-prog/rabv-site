@@ -85,7 +85,34 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!first.has(h.questionId)) first.set(h.questionId, h);
     }
     return first;
+  
+
+// Agrupa el historial por pregunta (questionId) en orden cronológico (inserción).
+function buildAttemptsById() {
+  const byId = {};
+  for (const h of state.history) {
+    if (!h || !h.questionId) continue;
+    if (!byId[h.questionId]) byId[h.questionId] = [];
+    byId[h.questionId].push(h);
   }
+  return byId;
+}
+
+// "Aprendida" = 3 aciertos seguidos en cualquier momento del historial de esa pregunta.
+function isLearned(questionId, attemptsById) {
+  const arr = attemptsById && attemptsById[questionId] ? attemptsById[questionId] : [];
+  let streak = 0;
+  for (const a of arr) {
+    if (a && a.selected === a.correct) {
+      streak++;
+      if (streak >= 3) return true;
+    } else {
+      streak = 0;
+    }
+  }
+  return false;
+}
+}
 
   function getBlockQuestions(startIndex) {
     return questions.slice(startIndex, startIndex + BLOCK_SIZE);
@@ -125,22 +152,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return [];
   }
 
-    if (mode === "FIRST_OK") {
-      return blockQs.filter(q => {
-        const a = first.get(q.id);
-        return a && a.selected === a.correct;
-      });
-    }
-
-    return [];
-  }
-
   function resetBlockData(startIndex) {
     const blockQuestions = getBlockQuestions(startIndex);
     const ids = new Set(blockQuestions.map(q => q.id));
 
     state.history = state.history.filter(h => !ids.has(h.questionId));
-    for (const id of ids) delete state.attempts[id];
+    for (const id of ids) {
+      delete state.attempts[id];
+      if (state.demotedFailed) delete state.demotedFailed[id];
+    }
   }
 
   // ================= EXTENDED STATS AND ACTIONS =================
@@ -210,36 +230,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const starredCount = state.starred ? Object.keys(state.starred).length : 0;
-    return { responded, firstOk, failed: failedPending, dominadas, learned, starred: starredCount };
-  }
-
-    // Group all attempts by questionId
-    const byId = {};
-    for (const h of state.history) {
-      if (!h || !h.questionId) continue;
-      if (!byId[h.questionId]) byId[h.questionId] = [];
-      byId[h.questionId].push(h);
-    }
-    let dominadas = 0;
-    for (const id in byId) {
-      const arr = byId[id];
-      let streak = 0;
-      let dominated = false;
-      for (const a of arr) {
-        if (a.selected === a.correct) {
-          streak++;
-          if (streak >= 2) {
-            dominated = true;
-            break;
-          }
-        } else {
-          streak = 0;
-        }
-      }
-      if (dominated) dominadas++;
-    }
-    const starredCount = state.starred ? Object.keys(state.starred).length : 0;
-    return { responded, correct, failed, dominadas, starred: starredCount };
+    return { responded, correct: firstOk, failed: failedPending, dominadas, learned, starred: starredCount };
   }
 
   /**
@@ -647,6 +638,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
     const first = getFirstAttemptsMap();
+    const attemptsById = buildAttemptsById();
 
     for (let i = 0; i < numBlocks; i++) {
       const startIndex = i * BLOCK_SIZE;
