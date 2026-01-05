@@ -29,13 +29,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ================= CONFIG =================
   const BLOCK_SIZE = 10;
-  const MOST_FAILED_COUNT = 40; // TOP global
+  const MOST_FAILED_COUNT = 40; // ✅ TOP 40 global (o menos si no hay)
 
   // ================= STATE =================
-  let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, resume: null };
+  // The app keeps track of answered questions (history), number of
+  // attempts per question, starred questions and the last point the
+  // user reached (resume).  The starred and resume properties may
+  // not exist in older saved data, so we normalise them later.
+  let state = { history: [], attempts: {}, starred: {}, resume: null };
   let currentBlock = [];
   let currentIndex = 0;
   let currentSessionTitle = "BLOQUE";
+  // Additional runtime variables used to build the resume state.  When
+  // starting a block or custom question set we record the start index
+  // and mode so we know how to restore it later.
   const EXAM_QUESTION_COUNT = 40;
   let currentBlockStartIndex = null;
   let currentMode = "NORMAL";
@@ -66,8 +73,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       history: Array.isArray(safe.history) ? safe.history : [],
       attempts: safe.attempts && typeof safe.attempts === "object" ? safe.attempts : {},
+      // If the saved data contains starred questions, use it; otherwise
+      // default to an empty object.  We never allow non-object values.
       starred: safe.starred && typeof safe.starred === "object" ? safe.starred : {},
-      demotedFailed: safe.demotedFailed && typeof safe.demotedFailed === "object" ? safe.demotedFailed : {},
+      // Resume information stores the last block/question the user was on.
+      // If missing, set to null so no resume button is shown.
       resume: safe.resume && typeof safe.resume === "object" ? safe.resume : null,
     };
   }
@@ -80,31 +90,6 @@ document.addEventListener("DOMContentLoaded", () => {
     return first;
   }
 
-  function buildAttemptsById() {
-    const byId = {};
-    for (const h of state.history) {
-      if (!h || !h.questionId) continue;
-      (byId[h.questionId] ||= []).push(h);
-    }
-    return byId;
-  }
-
-  // Aprendida = existe una racha de 3 aciertos seguidos en su historial.
-  function isLearned(qId, attemptsById) {
-    const arr = attemptsById?.[qId];
-    if (!arr || arr.length === 0) return false;
-    let streak = 0;
-    for (const a of arr) {
-      if (a.selected === a.correct) {
-        streak++;
-        if (streak >= 3) return true;
-      } else {
-        streak = 0;
-      }
-    }
-    return false;
-  }
-
   function getBlockQuestions(startIndex) {
     return questions.slice(startIndex, startIndex + BLOCK_SIZE);
   }
@@ -112,40 +97,24 @@ document.addEventListener("DOMContentLoaded", () => {
   function getQuestionsForMode(startIndex, mode) {
     const blockQs = getBlockQuestions(startIndex);
     const first = getFirstAttemptsMap();
-    const attemptsById = buildAttemptsById();
 
     if (mode === "NORMAL") return blockQs;
 
-    // Falladas = primer intento mal O degradada desde FIRST_OK; y NO aprendida
     if (mode === "FAILED") {
       return blockQs.filter(q => {
         const a = first.get(q.id);
-        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
-        const firstWrong = !!(a && a.selected !== a.correct);
-        return (firstWrong || demoted) && !isLearned(q.id, attemptsById);
+        return a && a.selected !== a.correct;
       });
     }
 
-    // Acertadas al primer intento = primer intento bien y NO degradada
     if (mode === "FIRST_OK") {
       return blockQs.filter(q => {
         const a = first.get(q.id);
-        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
-        return a && a.selected === a.correct && !demoted;
+        return a && a.selected === a.correct;
       });
     }
 
-    // Aprendidas (solo lectura)
-    if (mode === "LEARNED") {
-      return blockQs.filter(q => isLearned(q.id, attemptsById));
-    }
-
     return [];
-  }
-
-  function getLearnedQuestionsAll() {
-    const attemptsById = buildAttemptsById();
-    return questions.filter(q => isLearned(q.id, attemptsById));
   }
 
   function resetBlockData(startIndex) {
@@ -154,78 +123,78 @@ document.addEventListener("DOMContentLoaded", () => {
 
     state.history = state.history.filter(h => !ids.has(h.questionId));
     for (const id of ids) delete state.attempts[id];
-    for (const id of ids) delete state.starred[id];
-    for (const id of ids) delete state.demotedFailed[id];
   }
 
-  // ================= STATS =================
+  // ================= EXTENDED STATS AND ACTIONS =================
+  /**
+   * Count overall statistics based off the stored history.  A
+   * question is considered "dominada" if it was answered correctly
+   * at least twice in a row at any point in its history.  This
+   * function groups attempts per question to determine that streak.
+   *
+   * Returns an object with properties: responded (number of unique
+   * questions answered at least once), correct (number of unique
+   * questions answered correctly on the first attempt), failed
+   * (number of unique questions answered incorrectly on the first
+   * attempt), dominadas (number of questions with two consecutive
+   * correct answers), starred (current count of starred questions).
+   */
   function countStats() {
     const first = getFirstAttemptsMap();
-    const attemptsById = buildAttemptsById();
-
     let responded = 0;
-    let firstOk = 0; // a la primera (y no degradada)
+    let correct = 0;
+    let failed = 0;
 
+    // Count unique answered, correct on first attempt and wrong on first attempt
     for (const [id, att] of first.entries()) {
       responded++;
-      const demoted = !!(state.demotedFailed && state.demotedFailed[id]);
-      if (att.selected === att.correct && !demoted) firstOk++;
+      if (att.selected === att.correct) correct++;
+      else failed++;
     }
 
-    // Aprendidas (3 seguidas)
-    let learned = 0;
-    for (const id in attemptsById) {
-      if (isLearned(id, attemptsById)) learned++;
+    // Group all attempts by questionId
+    const byId = {};
+    for (const h of state.history) {
+      if (!h || !h.questionId) continue;
+      if (!byId[h.questionId]) byId[h.questionId] = [];
+      byId[h.questionId].push(h);
     }
-
-    // Falladas actuales = primer intento mal O degradada; y NO aprendida
-    let failedPending = 0;
-    for (const [id, att] of first.entries()) {
-      const demoted = !!(state.demotedFailed && state.demotedFailed[id]);
-      const firstWrong = att.selected !== att.correct;
-      if ((firstWrong || demoted) && !isLearned(id, attemptsById)) failedPending++;
-    }
-    // Nota: también puede haber degradadas sin "first" (raro). Las contamos igual:
-    for (const idStr of Object.keys(state.demotedFailed || {})) {
-      const id = isNaN(+idStr) ? idStr : +idStr;
-      if (!first.has(id) && !isLearned(id, attemptsById)) failedPending++;
-    }
-
-    // Dominadas = racha de 2 aciertos seguidos en algún momento
     let dominadas = 0;
-    for (const id in attemptsById) {
-      const arr = attemptsById[id];
+    for (const id in byId) {
+      const arr = byId[id];
       let streak = 0;
-      let ok = false;
+      let dominated = false;
       for (const a of arr) {
         if (a.selected === a.correct) {
           streak++;
-          if (streak >= 2) { ok = true; break; }
+          if (streak >= 2) {
+            dominated = true;
+            break;
+          }
         } else {
           streak = 0;
         }
       }
-      if (ok) dominadas++;
+      if (dominated) dominadas++;
     }
-
     const starredCount = state.starred ? Object.keys(state.starred).length : 0;
-    return { responded, firstOk, learned, failed: failedPending, dominadas, starred: starredCount };
+    return { responded, correct, failed, dominadas, starred: starredCount };
   }
 
+  /**
+   * Build and return a statistics panel element based on current data.
+   */
   function createStatsPanel() {
     const stats = countStats();
     const panel = document.createElement("div");
     panel.className = "stats";
-
     const items = [
       { title: "Respondidas", value: stats.responded },
-      { title: "A la primera", value: stats.firstOk },
-      { title: "Aprendidas (3 seguidas)", value: stats.learned },
+      { title: "Acertadas", value: stats.correct },
       { title: "Falladas", value: stats.failed },
       { title: "Dominadas", value: stats.dominadas },
       { title: "Marcadas", value: stats.starred },
     ];
-
     items.forEach(item => {
       const div = document.createElement("div");
       div.className = "stats-item";
@@ -239,24 +208,33 @@ document.addEventListener("DOMContentLoaded", () => {
       div.appendChild(tit);
       panel.appendChild(div);
     });
-
     return panel;
   }
 
-  // ================= RESUME / SEARCH / ACTIONS =================
+  /**
+   * Build and return a resume section.  If state.resume exists and
+   * contains valid data, the section will show a button allowing the
+   * user to continue where they left off.
+   */
   function createResumeSection() {
     const container = document.createElement("div");
     container.className = "resume-container";
     const resumeInfo = state.resume;
     if (resumeInfo && typeof resumeInfo === "object") {
       const btn = document.createElement("button");
+      // Determine display text for the resume button
       let text = "Continuar";
-      if (resumeInfo.sessionTitle) text += ` ${resumeInfo.sessionTitle}`;
+      if (resumeInfo.sessionTitle) {
+        text += ` ${resumeInfo.sessionTitle}`;
+      }
       if (typeof resumeInfo.blockStartIndex === "number" && resumeInfo.blockStartIndex >= 0) {
         const blockNum = Math.floor(resumeInfo.blockStartIndex / BLOCK_SIZE) + 1;
         text += ` ${blockNum}`;
       }
-      if (typeof resumeInfo.currentIndex === "number") text += ` (pregunta ${resumeInfo.currentIndex + 1})`;
+      if (typeof resumeInfo.currentIndex === "number") {
+        const qNum = resumeInfo.currentIndex + 1;
+        text += ` (pregunta ${qNum})`;
+      }
       btn.textContent = text;
       btn.onclick = resume;
       container.appendChild(btn);
@@ -265,6 +243,11 @@ document.addEventListener("DOMContentLoaded", () => {
     return container;
   }
 
+  /**
+   * Build and return a search container with an input for searching
+   * blocks or questions.  The input triggers a search when the user
+   * presses Enter.
+   */
   function createSearchContainer() {
     const container = document.createElement("div");
     container.className = "search-container";
@@ -273,22 +256,28 @@ document.addEventListener("DOMContentLoaded", () => {
     input.placeholder = "Buscar bloque, pregunta...";
     input.className = "search-input";
     input.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") handleSearch(input.value);
+      if (ev.key === "Enter") {
+        handleSearch(input.value);
+      }
     });
     container.appendChild(input);
     return container;
   }
 
+  /**
+   * Build and return a container with action buttons for exam and
+   * reviewing starred questions.
+   */
   function createMenuActions() {
     const container = document.createElement("div");
     container.className = "menu-actions";
-
+    // Exam button
     const examBtn = document.createElement("button");
     examBtn.type = "button";
     examBtn.textContent = `Simulacro (${EXAM_QUESTION_COUNT})`;
     examBtn.onclick = startExam;
     container.appendChild(examBtn);
-
+    // Star review button
     const starBtn = document.createElement("button");
     starBtn.type = "button";
     const starCount = state.starred ? Object.keys(state.starred).length : 0;
@@ -296,26 +285,28 @@ document.addEventListener("DOMContentLoaded", () => {
     starBtn.disabled = starCount === 0;
     starBtn.onclick = startStarReview;
     container.appendChild(starBtn);
-
-    const learnedAll = getLearnedQuestionsAll();
-    const learnedBtn = document.createElement("button");
-    learnedBtn.type = "button";
-    learnedBtn.textContent = `Ver aprendidas (${learnedAll.length})`;
-    learnedBtn.disabled = learnedAll.length === 0;
-    learnedBtn.onclick = () => startCustomQuestions(learnedAll, "APRENDIDAS", "LEARNED");
-    container.appendChild(learnedBtn);
-
     return container;
   }
 
-  // ================= STAR =================
+  /**
+   * Toggle the starred state of a question by id.  Updates the
+   * internal state and the star button UI.
+   */
   function toggleStar(qId) {
-    state.starred ||= {};
-    if (state.starred[qId]) delete state.starred[qId];
-    else state.starred[qId] = true;
+    if (!state.starred) state.starred = {};
+    if (state.starred[qId]) {
+      delete state.starred[qId];
+    } else {
+      state.starred[qId] = true;
+    }
     updateStarButton(qId);
   }
 
+  /**
+   * Update the appearance of the star button in the current question
+   * header based on whether the question is starred.  Also update
+   * aria-labels for accessibility.
+   */
   function updateStarButton(qId) {
     const btn = questionEl.querySelector(".star-btn");
     if (!btn) return;
@@ -325,107 +316,139 @@ document.addEventListener("DOMContentLoaded", () => {
     else btn.classList.remove("starred");
   }
 
-  // ================= EXAM / STAR REVIEW =================
+  /**
+   * Start an exam with a fixed number of random questions.  The
+   * questions are selected at random from the full question set.  If
+   * there are fewer than EXAM_QUESTION_COUNT questions, all are used.
+   */
   function startExam() {
+    // Create a shuffled copy of the questions array
     const shuffled = questions.slice().sort(() => Math.random() - 0.5);
     const selected = shuffled.slice(0, EXAM_QUESTION_COUNT);
-    startCustomQuestions(selected, "EXAMEN", "CUSTOM");
+    startCustomQuestions(selected, "EXAMEN");
   }
 
-  function startStarReview() {
-    const starredIds = state.starred ? Object.keys(state.starred) : [];
-    if (starredIds.length === 0) {
-      alert("No hay preguntas marcadas para repasar.");
-      return;
-    }
-
-    const byId = new Map(questions.map(q => [q.id, q]));
-    const qList = [];
-    for (const id of starredIds) {
-      const q = byId.get(Number(id)); // IDs guardadas como string
-      if (q) qList.push(q);
-    }
-
-    if (qList.length === 0) {
-      alert("Las preguntas marcadas ya no existen.");
-      return;
-    }
-
-    startCustomQuestions(qList, "MARCADAS", "CUSTOM");
+  /**
+   * Start a session with only the starred questions.  If there are no
+   * starred questions the user is informed.
+   */
+  
+function startStarReview() {
+  const starredIds = state.starred ? Object.keys(state.starred) : [];
+  if (starredIds.length === 0) {
+    alert("No hay preguntas marcadas para repasar.");
+    return;
   }
 
-  // ================= SEARCH =================
+  // 👇 Map con IDs numéricos
+  const byId = new Map(questions.map(q => [q.id, q]));
+  const qList = [];
+
+  for (const id of starredIds) {
+    const q = byId.get(Number(id)); // ✅ FIX CLAVE
+    if (q) qList.push(q);
+  }
+
+  if (qList.length === 0) {
+    alert("Las preguntas marcadas ya no existen.");
+    return;
+  }
+
+  startCustomQuestions(qList, "MARCADAS");
+}
+  /**
+   * Search for blocks or questions based on the user's input.  A
+   * numeric value is interpreted as a block number (1-based) or
+   * question index.  Otherwise a free-text search is performed on
+   * question text and option contents.
+   */
   function handleSearch(term) {
-    const query = String(term || "").trim();
+    if (!term) return;
+    const query = String(term).trim();
     if (!query) return;
-
     const num = parseInt(query, 10);
     if (!isNaN(num)) {
+      // Determine whether it's a block number or question index
       const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
       if (num >= 1 && num <= numBlocks) {
-        startBlock((num - 1) * BLOCK_SIZE, "NORMAL");
+        const startIdx = (num - 1) * BLOCK_SIZE;
+        startBlock(startIdx, "NORMAL");
         return;
       }
       if (num >= 1 && num <= questions.length) {
-        startCustomQuestions([questions[num - 1]], `Pregunta ${num}`, "CUSTOM");
+        const q = questions[num - 1];
+        startCustomQuestions([q], `Pregunta ${num}`);
         return;
       }
     }
-
+    // Free-text search
     const termLower = query.toLowerCase();
     const results = questions.filter(q => {
-      const inQuestion = (q.question || "").toLowerCase().includes(termLower);
-      const inOptions = Object.values(q.options || {}).some(opt => String(opt || "").toLowerCase().includes(termLower));
+      const inQuestion = q.question && q.question.toLowerCase().includes(termLower);
+      const inOptions = Object.values(q.options || {}).some(opt => (opt || "").toLowerCase().includes(termLower));
       return inQuestion || inOptions;
     });
-
     if (results.length === 0) {
       alert("No se encontraron preguntas coincidentes.");
       return;
     }
-
-    startCustomQuestions(results, `BUSCAR: ${query}`, "CUSTOM");
+    startCustomQuestions(results, `BUSCAR: ${query}`);
   }
 
-  // ================= RESUME =================
+  /**
+   * Continue from the saved resume position.  Restores the last block
+   * and question index.  If there is no valid resume information
+   * nothing happens.
+   */
   function resume() {
     const info = state.resume;
     if (!info || typeof info !== "object") return;
-
+    // Determine the set of questions to load based on saved mode
     if (typeof info.blockStartIndex === "number" && info.blockStartIndex >= 0) {
-      startBlock(info.blockStartIndex, info.mode || "NORMAL");
+      // Normal block session
+      currentBlockStartIndex = info.blockStartIndex;
+      currentMode = info.mode || "NORMAL";
+      startBlock(info.blockStartIndex, currentMode);
     } else if (Array.isArray(info.customQuestions)) {
-      startCustomQuestions(info.customQuestions, info.sessionTitle || "REPASO", info.mode || "CUSTOM");
+      // Custom session saved - not used in this version but kept for
+      // completeness
+      startCustomQuestions(info.customQuestions, info.sessionTitle || "REPASO");
     } else {
       return;
     }
-
+    // After starting block, override currentIndex and sessionTitle
     if (typeof info.currentIndex === "number" && info.currentIndex >= 0) {
       currentIndex = info.currentIndex;
+      // reload the saved question instead of the first one
       loadQuestion();
     }
   }
 
-  // ================= MOST FAILED TOP =================
+  // ✅ Top N preguntas más falladas (global, contando todos los intentos)
+  //    Si hay menos de N, devuelve las que haya.
   function getMostFailedQuestionsTopN(n) {
-    const failCount = new Map();
+    const failCount = new Map(); // questionId -> nº fallos
+
     for (const h of state.history) {
       if (!h || !h.questionId) continue;
       if (h.selected !== h.correct) {
         failCount.set(h.questionId, (failCount.get(h.questionId) || 0) + 1);
       }
     }
+
     const sortedIds = Array.from(failCount.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([id]) => id);
 
     const byId = new Map(questions.map(q => [q.id, q]));
     const top = [];
+
     for (const id of sortedIds) {
       const q = byId.get(id);
       if (q) top.push(q);
       if (top.length >= n) break;
     }
+
     return top;
   }
 
@@ -469,12 +492,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function login() {
     clearLoginError();
+
     const email = (emailEl?.value || "").trim();
     const password = (passwordEl?.value || "");
 
     try {
       await ensurePersistence();
       const cred = await auth.signInWithEmailAndPassword(email, password);
+
       if (!isAuthorized(cred.user)) {
         await auth.signOut();
         showLoginError("No autorizado.");
@@ -495,7 +520,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ================= MENU RENDER =================
+  // ================= MENU =================
   function renderMenuTopbar() {
     const top = document.createElement("div");
     top.className = "menu-topbar";
@@ -524,19 +549,21 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.id = "repeatMostFailedBtn";
     btn.type = "button";
 
+    // Texto dinámico: "Top 40" pero si hay menos, muestra cuántas hay
     const n = mostFailed.length;
     btn.textContent = n > 0
       ? `Repetir más falladas (${n} pregunta${n === 1 ? "" : "s"})`
       : `Repetir más falladas (${MOST_FAILED_COUNT})`;
 
     btn.disabled = n === 0;
+
     btn.onclick = () => {
       const qs = getMostFailedQuestionsTopN(MOST_FAILED_COUNT);
       if (qs.length === 0) {
         alert("Todavía no hay fallos registrados.");
         return;
       }
-      startCustomQuestions(qs, "REPASO", "CUSTOM");
+      startCustomQuestions(qs, "REPASO");
     };
 
     footer.appendChild(btn);
@@ -550,18 +577,20 @@ document.addEventListener("DOMContentLoaded", () => {
     menuEl.style.display = "block";
 
     menuEl.innerHTML = "";
+    // Top bar (title and logout)
     menuEl.appendChild(renderMenuTopbar());
-
+    // Optional resume button
     const resumeSection = createResumeSection();
     if (resumeSection) menuEl.appendChild(resumeSection);
-
+    // Global statistics panel
     menuEl.appendChild(createStatsPanel());
+    // Search bar
     menuEl.appendChild(createSearchContainer());
+    // Additional actions (exam and review starred)
     menuEl.appendChild(createMenuActions());
 
     const numBlocks = Math.ceil(questions.length / BLOCK_SIZE);
     const first = getFirstAttemptsMap();
-    const attemptsById = buildAttemptsById();
 
     for (let i = 0; i < numBlocks; i++) {
       const startIndex = i * BLOCK_SIZE;
@@ -570,38 +599,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const blockQuestions = getBlockQuestions(startIndex);
 
-      let firstOkCount = 0;          // a la primera (no degradada)
-      let failedPendingCount = 0;    // falladas actuales (firstWrong o degradadas) y NO aprendidas
-      let learnedCount = 0;          // aprendidas
-      let recoveredCount = 0;        // para el %: falladas (o degradadas) que ya aprendiste
+      let correctCount = 0;
+      let failedCount = 0;
       let answeredCount = 0;
 
       for (const q of blockQuestions) {
         const a = first.get(q.id);
-        const demoted = !!(state.demotedFailed && state.demotedFailed[q.id]);
-        const learned = isLearned(q.id, attemptsById);
-
-        if (learned) learnedCount++;
-
-        const hasFirst = !!a;
-        const consideredAnswered = hasFirst || demoted;
-        if (!consideredAnswered) continue;
-
+        if (!a) continue;
         answeredCount++;
-
-        const firstWasCorrect = !!(a && a.selected === a.correct);
-        const firstWasWrong = !!(a && a.selected !== a.correct);
-
-        if (firstWasCorrect && !demoted) firstOkCount++;
-
-        const isFailedNow = (firstWasWrong || demoted) && !learned;
-        if (isFailedNow) failedPendingCount++;
-
-        if ((firstWasWrong || demoted) && learned) recoveredCount++;
+        if (a.selected === a.correct) correctCount++;
+        else failedCount++;
       }
 
-      const correctNowCount = firstOkCount + recoveredCount;
-      const percent = Math.round((correctNowCount / blockQuestions.length) * 100);
+      const percent = Math.round((correctCount / blockQuestions.length) * 100);
 
       const row = document.createElement("div");
       row.className = "block-row";
@@ -613,30 +623,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const percentEl = document.createElement("span");
       percentEl.className = "block-percent";
-      percentEl.textContent = `${correctNowCount}/${blockQuestions.length} (${percent}%)`;
+      percentEl.textContent = `${correctCount}/${blockQuestions.length} (${percent}%)`;
 
-      if (answeredCount === 0) percentEl.classList.add("pct-none");
-      else if (percent >= 80) percentEl.classList.add("pct-good");
-      else if (percent >= 50) percentEl.classList.add("pct-mid");
-      else percentEl.classList.add("pct-bad");
+      // Colores del contador del bloque:
+      // - Sin responder: mantiene el color neutro original
+      // - 10/10: verde
+      // - Cualquier valor menor: rojo
+      if (answeredCount === 0) {
+        percentEl.classList.add("pct-none");
+      } else if (correctCount === blockQuestions.length) {
+        percentEl.classList.add("pct-good");
+      } else {
+        percentEl.classList.add("pct-bad");
+      }
 
       const failedBtn = document.createElement("button");
       failedBtn.className = "block-mini";
-      failedBtn.textContent = `Rehacer falladas (${failedPendingCount})`;
-      failedBtn.disabled = failedPendingCount === 0;
+      failedBtn.textContent = `Rehacer falladas (${failedCount})`;
+      failedBtn.disabled = failedCount === 0;
       failedBtn.onclick = () => startBlock(startIndex, "FAILED");
 
       const firstOkBtn = document.createElement("button");
       firstOkBtn.className = "block-mini";
-      firstOkBtn.textContent = `Rehacer acertadas al primer intento (${firstOkCount})`;
-      firstOkBtn.disabled = firstOkCount === 0;
+      firstOkBtn.textContent = `Rehacer acertadas (${correctCount})`;
+      firstOkBtn.disabled = correctCount === 0;
       firstOkBtn.onclick = () => startBlock(startIndex, "FIRST_OK");
-
-      const learnedBtn = document.createElement("button");
-      learnedBtn.className = "block-mini";
-      learnedBtn.textContent = `Ver aprendidas (${learnedCount})`;
-      learnedBtn.disabled = learnedCount === 0;
-      learnedBtn.onclick = () => startBlock(startIndex, "LEARNED");
 
       const resetBtn = document.createElement("button");
       resetBtn.className = "block-reset";
@@ -658,7 +669,6 @@ document.addEventListener("DOMContentLoaded", () => {
       row.appendChild(percentEl);
       row.appendChild(failedBtn);
       row.appendChild(firstOkBtn);
-      row.appendChild(learnedBtn);
       row.appendChild(resetBtn);
 
       menuEl.appendChild(row);
@@ -667,16 +677,11 @@ document.addEventListener("DOMContentLoaded", () => {
     menuEl.appendChild(renderMenuFooter());
   }
 
-  // ================= SESSION START =================
+  // ================= SESIONES DE PREGUNTAS =================
   function startBlock(startIndex, mode) {
-    if (mode === "FAILED") currentSessionTitle = "FALLADAS";
-    else if (mode === "FIRST_OK") currentSessionTitle = "ACERTADAS (1er intento)";
-    else if (mode === "LEARNED") currentSessionTitle = "APRENDIDAS";
-    else currentSessionTitle = "BLOQUE";
-
+    currentSessionTitle = "BLOQUE";
     currentBlockStartIndex = startIndex;
     currentMode = mode;
-
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -685,26 +690,18 @@ document.addEventListener("DOMContentLoaded", () => {
     currentBlock = getQuestionsForMode(startIndex, mode);
 
     if (currentBlock.length === 0) {
-      alert("No hay preguntas para este bloque/modo.");
+      alert("No hay preguntas para este bloque.");
       showMenu();
       return;
     }
 
-    state.resume = {
-      blockStartIndex: currentBlockStartIndex,
-      currentIndex: currentIndex,
-      sessionTitle: currentSessionTitle,
-      mode: currentMode,
-    };
-
     loadQuestion();
   }
 
-  function startCustomQuestions(qs, title, modeOverride) {
+  function startCustomQuestions(qs, title) {
     currentSessionTitle = title || "REPASO";
     currentBlockStartIndex = -1;
-    currentMode = modeOverride || "CUSTOM";
-
+    currentMode = "CUSTOM";
     menuEl.style.display = "none";
     testEl.style.display = "block";
     blockMsgEl.style.display = "none";
@@ -718,24 +715,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    state.resume = {
-      blockStartIndex: currentBlockStartIndex,
-      currentIndex: currentIndex,
-      sessionTitle: currentSessionTitle,
-      mode: currentMode,
-    };
-
     loadQuestion();
   }
 
-  // ================= QUESTION RENDER =================
   function loadQuestion() {
     const q = currentBlock[currentIndex];
-
+    // Render question header with star icon
     questionEl.innerHTML = "";
     const headerDiv = document.createElement("div");
     headerDiv.className = "question-header";
-
+    // Star button
     const starBtn = document.createElement("button");
     starBtn.type = "button";
     starBtn.className = "star-btn";
@@ -744,26 +733,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isStarred) starBtn.classList.add("starred");
     starBtn.onclick = () => toggleStar(q.id);
     headerDiv.appendChild(starBtn);
-
+    // Question text
     const textSpan = document.createElement("span");
     textSpan.textContent = q.question;
     headerDiv.appendChild(textSpan);
-
     questionEl.appendChild(headerDiv);
 
     optionsEl.innerHTML = "";
-
-    if (currentMode === "LEARNED") {
-      const correctLetter = q.correct;
-      const correctText = (q.options && q.options[correctLetter]) ? q.options[correctLetter] : "";
-      const box = document.createElement("div");
-      box.className = "learned-answer";
-      box.textContent = `Respuesta correcta: ${correctLetter}) ${correctText}`;
-      optionsEl.appendChild(box);
-      nextBtn.disabled = false;
-      return;
-    }
-
     nextBtn.disabled = true;
 
     Object.entries(q.options).forEach(([letter, text]) => {
@@ -793,15 +769,10 @@ document.addEventListener("DOMContentLoaded", () => {
       date: new Date().toISOString()
     });
 
-    // Si estás en "Rehacer acertadas al primer intento" y la fallas => pasa a falladas (degradada)
-    if (currentMode === "FIRST_OK" && selected !== correct) {
-      state.demotedFailed ||= {};
-      state.demotedFailed[qId] = true;
-    }
-
     state.attempts[qId] = (state.attempts[qId] || 0) + 1;
     nextBtn.disabled = false;
 
+    // Update resume information so the user can continue at this point
     state.resume = {
       blockStartIndex: currentBlockStartIndex,
       currentIndex: currentIndex,
@@ -820,7 +791,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   nextBtn.onclick = async () => {
     currentIndex++;
-
+    // If we've moved to the next question, update resume to reflect the new index
     if (currentIndex < currentBlock.length) {
       state.resume = {
         blockStartIndex: currentBlockStartIndex,
@@ -831,6 +802,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (currentIndex >= currentBlock.length) {
+      // End of session: clear resume so it does not offer to continue
       state.resume = null;
       testEl.style.display = "none";
       blockMsgEl.style.display = "block";
@@ -864,6 +836,40 @@ document.addEventListener("DOMContentLoaded", () => {
     loginEl.style.display = "none";
     await loadProgress(user);
     showMenu();
+  });
+
+  // ================= KEYBOARD SHORTCUTS =================
+  // Provide keyboard shortcuts for quicker navigation.  The shortcuts
+  // only trigger when the focus is not inside an input field.  Keys:
+  //  n/N – next question (in a test session)
+  //  b/B – return to menu (while in a test session)
+  //  r/R – repeat most failed questions
+  //  c/C – continue from resume
+  document.addEventListener("keydown", (ev) => {
+    const tag = ev.target && ev.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    const key = ev.key && ev.key.toLowerCase();
+    if (key === "n") {
+      // Next question
+      if (testEl.style.display === "block" && !nextBtn.disabled) {
+        nextBtn.click();
+      }
+    } else if (key === "b") {
+      // Back to menu
+      if (testEl.style.display === "block") {
+        backToMenuBtn && backToMenuBtn.click();
+      }
+    } else if (key === "r") {
+      // Repeat most failed questions
+      const repeatBtn = document.getElementById("repeatMostFailedBtn");
+      if (repeatBtn && !repeatBtn.disabled) repeatBtn.click();
+    } else if (key === "c") {
+      // Continue from resume
+      const resumeBtn = document.querySelector(".resume-container button");
+      if (resumeBtn && resumeBtn.offsetParent !== null) {
+        resumeBtn.click();
+      }
+    }
   });
 
 });

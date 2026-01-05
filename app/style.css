@@ -127,7 +127,7 @@ button:disabled {
 /* ===== Menú por bloque ===== */
 .block-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto;
   gap: 10px;
   align-items: center;
   margin: 10px 0;
@@ -157,8 +157,8 @@ button:disabled {
 }
 
 .block-percent.pct-good {
-  background: rgba(34, 193, 195, 0.18);
-  border-color: rgba(34, 193, 195, 0.40);
+  background: rgba(40, 180, 99, 0.18);
+  border-color: rgba(40, 180, 99, 0.45);
 }
 
 .block-percent.pct-mid {
@@ -225,16 +225,6 @@ button:disabled {
 #options {
   display: grid;
   gap: 10px;
-}
-
-/* Modo "Aprendidas": muestra solo la respuesta correcta */
-.learned-answer {
-  padding: 14px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  font-size: 17px;
-  line-height: 1.35;
 }
 
 #options button {
@@ -462,37 +452,4 @@ button.incorrect {
 
 .legal-back a:hover {
   text-decoration: underline;
-}
-/* ===== Ajuste móvil: evitar desencuadres en botones largos ===== */
-@media (max-width: 520px) {
-  .block-row {
-    grid-template-columns: 1fr;   /* 1 columna */
-    gap: 8px;
-  }
-
-  /* Que cada elemento ocupe todo el ancho */
-  .block-row > * {
-    width: 100%;
-  }
-
-  /* El % no necesita min-width en móvil */
-  .block-percent {
-    min-width: 0;
-    justify-content: flex-start;
-  }
-
-  /* Permitir que el texto se parta en 2 líneas */
-  .block-mini,
-  .block-reset {
-    white-space: normal;   /* sobrescribe el nowrap */
-    line-height: 1.15;
-  }
-
-  /* Un pelín más compacto */
-  .block-mini,
-  .block-reset,
-  .block-main {
-    padding: 10px 12px;
-    font-size: 14px;
-  }
 }
