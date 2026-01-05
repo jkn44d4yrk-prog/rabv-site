@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const MOST_FAILED_COUNT = 40; // TOP global
 
   // ================= STATE =================
-  let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCounts: {}, starSuppressed: {}, resume: null };
+  let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, resume: null };
   let currentBlock = [];
   let currentIndex = 0;
   let currentSessionTitle = "BLOQUE";
@@ -63,28 +63,11 @@ document.addEventListener("DOMContentLoaded", () => {
   // ================= HELPERS =================
   function normalizeState(loaded) {
     const safe = loaded && typeof loaded === "object" ? loaded : {};
-    const history = Array.isArray(safe.history) ? safe.history : [];
-
-    // failCounts puede no existir en estados antiguos. Si falta, lo reconstruimos desde history.
-    let failCounts = (safe.failCounts && typeof safe.failCounts === "object") ? safe.failCounts : null;
-    if (!failCounts) {
-      failCounts = {};
-      for (const h of history) {
-        if (!h || !h.questionId) continue;
-        if (h.selected !== h.correct) {
-          failCounts[h.questionId] = (failCounts[h.questionId] || 0) + 1;
-        }
-      }
-    }
-
     return {
-      history,
+      history: Array.isArray(safe.history) ? safe.history : [],
       attempts: safe.attempts && typeof safe.attempts === "object" ? safe.attempts : {},
       starred: safe.starred && typeof safe.starred === "object" ? safe.starred : {},
       demotedFailed: safe.demotedFailed && typeof safe.demotedFailed === "object" ? safe.demotedFailed : {},
-      failCounts,
-      // Si el usuario desmarca manualmente una auto-estrella, aquí guardamos que no se auto-marque de nuevo.
-      starSuppressed: safe.starSuppressed && typeof safe.starSuppressed === "object" ? safe.starSuppressed : {},
       resume: safe.resume && typeof safe.resume === "object" ? safe.resume : null,
     };
   }
@@ -328,17 +311,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // ================= STAR =================
   function toggleStar(qId) {
     state.starred ||= {};
-    state.starSuppressed ||= {};
-
-    if (state.starred[qId]) {
-      // Si el usuario desmarca manualmente, evitamos que se vuelva a auto-marcar automáticamente.
-      delete state.starred[qId];
-      state.starSuppressed[qId] = true;
-    } else {
-      // Si marca manualmente, permitimos auto-marcado futuro (si así lo deseas).
-      state.starred[qId] = true;
-      delete state.starSuppressed[qId];
-    }
+    if (state.starred[qId]) delete state.starred[qId];
+    else state.starred[qId] = true;
     updateStarButton(qId);
   }
 
@@ -822,29 +796,11 @@ document.addEventListener("DOMContentLoaded", () => {
       date: new Date().toISOString()
     });
 
-    // Contar fallos totales (cualquier momento). Al llegar a 3, auto-marcar con estrella
-    // (aunque haya aciertos entre medias). Si el usuario la desmarca manualmente, no se auto-marca de nuevo.
-    state.failCounts ||= {};
-    state.starred ||= {};
-    state.starSuppressed ||= {};
-
-    if (selected !== correct) {
-      state.failCounts[qId] = (state.failCounts[qId] || 0) + 1;
-      if (state.failCounts[qId] >= 3 && !state.starred[qId] && !state.starSuppressed[qId]) {
-        state.starred[qId] = true;
-        updateStarButton(qId);
-      }
-    }
-
     // Si estás en "Rehacer acertadas al primer intento" y la fallas => pasa a falladas (degradada)
     if (currentMode === "FIRST_OK" && selected !== correct) {
       state.demotedFailed ||= {};
       state.demotedFailed[qId] = true;
     }
-
-    // Guardar inmediatamente (por si el usuario hace navegación/gesto del navegador)
-    const u = auth.currentUser;
-    if (u) { saveProgress(u); }
 
     state.attempts[qId] = (state.attempts[qId] || 0) + 1;
     nextBtn.disabled = false;
@@ -912,78 +868,5 @@ document.addEventListener("DOMContentLoaded", () => {
     await loadProgress(user);
     showMenu();
   });
-
-
-  // ================= ATAJOS TECLADO + SWIPE =================
-  function isTestVisible() {
-    return testEl && testEl.style.display === "block";
-  }
-
-  function clickOptionLetter(letter) {
-    if (!optionsEl) return false;
-    const target = optionsEl.querySelector(`button[data-letter="${letter}"]`);
-    if (target && !target.disabled) {
-      target.click();
-      return true;
-    }
-    return false;
-  }
-
-  // Teclado:
-  // - Enter => siguiente (si está habilitado)
-  // - A/B/C/D => seleccionar respuesta (si aún no se respondió)
-  document.addEventListener("keydown", (ev) => {
-    const tag = ev.target && ev.target.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
-    if (!isTestVisible()) return;
-
-    const key = (ev.key || "").toLowerCase();
-
-    if (key === "enter") {
-      if (!nextBtn.disabled) nextBtn.click();
-      return;
-    }
-
-    if (currentMode !== "LEARNED" && nextBtn.disabled && ["a", "b", "c", "d"].includes(key)) {
-      const letter = key.toUpperCase();
-      clickOptionLetter(letter);
-      return;
-    }
-  });
-
-  // Swipe:
-  // - Derecha => siguiente (si está habilitado)
-  // - Izquierda => volver al menú
-  let touchStartX = 0;
-  let touchStartY = 0;
-
-  if (testEl) {
-    testEl.addEventListener("touchstart", (e) => {
-      const t = e.changedTouches && e.changedTouches[0];
-      if (!t) return;
-      touchStartX = t.clientX;
-      touchStartY = t.clientY;
-    }, { passive: true });
-
-    testEl.addEventListener("touchend", (e) => {
-      if (!isTestVisible()) return;
-      const t = e.changedTouches && e.changedTouches[0];
-      if (!t) return;
-
-      const dx = t.clientX - touchStartX;
-      const dy = t.clientY - touchStartY;
-
-      // Ignorar si es más vertical que horizontal
-      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
-
-      if (dx > 0) {
-        // Derecha
-        if (!nextBtn.disabled) nextBtn.click();
-      } else {
-        // Izquierda
-        if (backToMenuBtn) backToMenuBtn.click();
-      }
-    }, { passive: true });
-  }
 
 });
