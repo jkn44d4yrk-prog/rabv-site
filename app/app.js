@@ -625,15 +625,13 @@ function startStarReview() {
       percentEl.className = "block-percent";
       percentEl.textContent = `${correctCount}/${blockQuestions.length} (${percent}%)`;
 
-      // Colores del contador del bloque:
-      // - Sin responder: mantiene el color neutro original
-      // - 10/10: verde
-      // - Cualquier valor menor: rojo
       if (answeredCount === 0) {
         percentEl.classList.add("pct-none");
       } else if (correctCount === blockQuestions.length) {
+        // Solo verde si es 10/10
         percentEl.classList.add("pct-good");
       } else {
+        // Cualquier valor menor de 10/10 => rojo
         percentEl.classList.add("pct-bad");
       }
 
