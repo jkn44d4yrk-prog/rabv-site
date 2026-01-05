@@ -615,10 +615,13 @@ document.addEventListener("DOMContentLoaded", () => {
       percentEl.className = "block-percent";
       percentEl.textContent = `${correctNowCount}/${blockQuestions.length} (${percent}%)`;
 
-      if (answeredCount === 0) percentEl.classList.add("pct-none");
-      else if (percent >= 80) percentEl.classList.add("pct-good");
-      else if (percent >= 50) percentEl.classList.add("pct-mid");
-      else percentEl.classList.add("pct-bad");
+      if (answeredCount === 0) {
+  percentEl.classList.add("pct-none");
+} else if (correctNowCount === blockQuestions.length) {
+  percentEl.classList.add("pct-good");
+} else {
+  percentEl.classList.add("pct-bad");
+}
 
       const failedBtn = document.createElement("button");
       failedBtn.className = "block-mini";
