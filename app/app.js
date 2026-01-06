@@ -40,6 +40,27 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
     menuReturn.targetId = (el && el.id) ? el.id : null;
   }
 
+  // Highlight the menu item we return to (for orientation).
+  let menuHighlightTimer = null;
+  let lastHighlightedMenuEl = null;
+  function highlightMenuTarget(el) {
+    if (!el) return;
+    try {
+      if (lastHighlightedMenuEl) lastHighlightedMenuEl.classList.remove("menu-return-highlight");
+    } catch (_) {}
+    lastHighlightedMenuEl = el;
+    el.classList.add("menu-return-highlight");
+    if (menuHighlightTimer) clearTimeout(menuHighlightTimer);
+    menuHighlightTimer = setTimeout(() => {
+      try {
+        if (lastHighlightedMenuEl) lastHighlightedMenuEl.classList.remove("menu-return-highlight");
+      } catch (_) {}
+      lastHighlightedMenuEl = null;
+      menuHighlightTimer = null;
+    }, 10000);
+  }
+
+
   function restoreMenuReturn() {
     const targetId = menuReturn.targetId;
     const y = menuReturn.scrollY || 0;
@@ -51,6 +72,7 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
           const el = document.getElementById(targetId);
           if (el) {
             el.scrollIntoView({ block: "center", inline: "nearest" });
+            highlightMenuTarget(el);
             return;
           }
         }
