@@ -33,6 +33,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ================= STATE =================
 let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCounts: {}, autoStarNextAt: {}, resume: null };
+  let menuReturn = { targetId: null, scrollY: 0 };
+
+  function setMenuReturnByEl(el) {
+    menuReturn.scrollY = window.scrollY || 0;
+    menuReturn.targetId = (el && el.id) ? el.id : null;
+  }
+
+  function restoreMenuReturn() {
+    const targetId = menuReturn.targetId;
+    const y = menuReturn.scrollY || 0;
+
+    // Wait until the menu has been rendered and laid out.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (targetId) {
+          const el = document.getElementById(targetId);
+          if (el) {
+            el.scrollIntoView({ block: "center", inline: "nearest" });
+            return;
+          }
+        }
+        window.scrollTo(0, y);
+      });
+    });
+  }
+
+
   let currentBlock = [];
   let currentIndex = 0;
   let currentSessionTitle = "BLOQUE";
@@ -290,7 +317,8 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
     const examBtn = document.createElement("button");
     examBtn.type = "button";
     examBtn.textContent = `Simulacro (${EXAM_QUESTION_COUNT})`;
-    examBtn.onclick = startExam;
+    examBtn.id = "menu-action-exam";
+    examBtn.onclick = () => { setMenuReturnByEl(examBtn); startExam(); };
     container.appendChild(examBtn);
 
     const starBtn = document.createElement("button");
@@ -298,7 +326,8 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
     const starCount = state.starred ? Object.keys(state.starred).length : 0;
     starBtn.textContent = `Repasar marcadas (${starCount})`;
     starBtn.disabled = starCount === 0;
-    starBtn.onclick = startStarReview;
+    starBtn.id = "menu-action-starred";
+    starBtn.onclick = () => { setMenuReturnByEl(starBtn); startStarReview(); };
     container.appendChild(starBtn);
 
     const learnedAll = getLearnedQuestionsAll();
@@ -306,7 +335,8 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
     learnedBtn.type = "button";
     learnedBtn.textContent = `Ver aprendidas (${learnedAll.length})`;
     learnedBtn.disabled = learnedAll.length === 0;
-    learnedBtn.onclick = () => startCustomQuestions(learnedAll, "APRENDIDAS", "LEARNED");
+    learnedBtn.id = "menu-action-learned-all";
+    learnedBtn.onclick = () => { setMenuReturnByEl(learnedBtn); startCustomQuestions(learnedAll, "APRENDIDAS", "LEARNED"); };
     container.appendChild(learnedBtn);
 
     return container;
@@ -569,6 +599,7 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
 
     btn.disabled = n === 0;
     btn.onclick = () => {
+      setMenuReturnByEl(btn);
       const qs = getMostFailedQuestionsTopN(MOST_FAILED_COUNT);
       if (qs.length === 0) {
         alert("Todavía no hay fallos registrados.");
@@ -647,7 +678,8 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
       const mainBtn = document.createElement("button");
       mainBtn.className = "block-main";
       mainBtn.textContent = `${start}-${end}`;
-      mainBtn.onclick = () => startBlock(startIndex, "NORMAL");
+      mainBtn.id = `menu-${startIndex}-NORMAL`;
+      mainBtn.onclick = () => { setMenuReturnByEl(mainBtn); startBlock(startIndex, "NORMAL"); };
 
       const percentEl = document.createElement("span");
       percentEl.className = "block-percent";
@@ -665,25 +697,30 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
       failedBtn.className = "block-mini";
       failedBtn.textContent = `Rehacer falladas (${failedPendingCount})`;
       failedBtn.disabled = failedPendingCount === 0;
-      failedBtn.onclick = () => startBlock(startIndex, "FAILED");
+      failedBtn.id = `menu-${startIndex}-FAILED`;
+      failedBtn.onclick = () => { setMenuReturnByEl(failedBtn); startBlock(startIndex, "FAILED"); };
 
       const firstOkBtn = document.createElement("button");
       firstOkBtn.className = "block-mini";
       firstOkBtn.textContent = `Rehacer acertadas al primer intento (${firstOkCount})`;
       firstOkBtn.disabled = firstOkCount === 0;
-      firstOkBtn.onclick = () => startBlock(startIndex, "FIRST_OK");
+      firstOkBtn.id = `menu-${startIndex}-FIRST_OK`;
+      firstOkBtn.onclick = () => { setMenuReturnByEl(firstOkBtn); startBlock(startIndex, "FIRST_OK"); };
 
       const learnedBtn = document.createElement("button");
       learnedBtn.className = "block-mini";
       learnedBtn.textContent = `Ver aprendidas (${learnedCount})`;
       learnedBtn.disabled = learnedCount === 0;
-      learnedBtn.onclick = () => startBlock(startIndex, "LEARNED");
+      learnedBtn.id = `menu-${startIndex}-LEARNED`;
+      learnedBtn.onclick = () => { setMenuReturnByEl(learnedBtn); startBlock(startIndex, "LEARNED"); };
 
       const resetBtn = document.createElement("button");
       resetBtn.className = "block-reset";
       resetBtn.textContent = "Reset";
       resetBtn.disabled = answeredCount === 0;
+      resetBtn.id = `menu-${startIndex}-RESET`;
       resetBtn.onclick = async () => {
+        setMenuReturnByEl(resetBtn);
         const ok = confirm(`¿Resetear el bloque ${start}-${end} a 0 y empezarlo de nuevo?`);
         if (!ok) return;
 
@@ -706,10 +743,12 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
     }
 
     menuEl.appendChild(renderMenuFooter());
+    restoreMenuReturn();
   }
 
   // ================= SESSION START =================
   function startBlock(startIndex, mode) {
+    if (menuEl.style.display === "block" && !menuReturn.targetId) menuReturn.scrollY = window.scrollY || 0;
     if (mode === "FAILED") currentSessionTitle = "FALLADAS";
     else if (mode === "FIRST_OK") currentSessionTitle = "ACERTADAS (1er intento)";
     else if (mode === "LEARNED") currentSessionTitle = "APRENDIDAS";
@@ -742,6 +781,7 @@ let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCou
   }
 
   function startCustomQuestions(qs, title, modeOverride) {
+    if (menuEl.style.display === "block" && !menuReturn.targetId) menuReturn.scrollY = window.scrollY || 0;
     currentSessionTitle = title || "REPASO";
     currentBlockStartIndex = -1;
     currentMode = modeOverride || "CUSTOM";
