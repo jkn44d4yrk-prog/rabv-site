@@ -32,7 +32,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const MOST_FAILED_COUNT = 40; // TOP global
 
   // ================= STATE =================
-  let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, resume: null };
+let state = { history: [], attempts: {}, starred: {}, demotedFailed: {}, failCounts: {}, autoStarNextAt: {}, resume: null };
   let currentBlock = [];
   let currentIndex = 0;
   let currentSessionTitle = "BLOQUE";
@@ -68,6 +68,8 @@ document.addEventListener("DOMContentLoaded", () => {
       attempts: safe.attempts && typeof safe.attempts === "object" ? safe.attempts : {},
       starred: safe.starred && typeof safe.starred === "object" ? safe.starred : {},
       demotedFailed: safe.demotedFailed && typeof safe.demotedFailed === "object" ? safe.demotedFailed : {},
+      failCounts: safe.failCounts && typeof safe.failCounts === "object" ? safe.failCounts : {},
+      autoStarNextAt: safe.autoStarNextAt && typeof safe.autoStarNextAt === "object" ? safe.autoStarNextAt : {},
       resume: safe.resume && typeof safe.resume === "object" ? safe.resume : null,
     };
   }
@@ -156,6 +158,8 @@ document.addEventListener("DOMContentLoaded", () => {
     for (const id of ids) delete state.attempts[id];
     for (const id of ids) delete state.starred[id];
     for (const id of ids) delete state.demotedFailed[id];
+    for (const id of ids) delete state.failCounts[id];
+    for (const id of ids) delete state.autoStarNextAt[id];
   }
 
   // ================= STATS =================
@@ -308,11 +312,43 @@ document.addEventListener("DOMContentLoaded", () => {
     return container;
   }
 
+
+  // ================= FAIL COUNTS (for auto-star) =================
+  function rebuildFailCountsFromHistory() {
+    state.failCounts = {};
+    for (const h of state.history || []) {
+      if (!h || !h.questionId) continue;
+      if (h.selected !== h.correct) {
+        state.failCounts[h.questionId] = (state.failCounts[h.questionId] || 0) + 1;
+      }
+    }
+  }
+
+  function getFailCount(qId) {
+    return Number((state.failCounts && state.failCounts[qId]) || 0);
+  }
+
+  function getNextAutoStarAt(qId) {
+    const n = state.autoStarNextAt && state.autoStarNextAt[qId];
+    const v = Number(n);
+    return Number.isFinite(v) && v > 0 ? v : 3;
+  }
   // ================= STAR =================
   function toggleStar(qId) {
     state.starred ||= {};
-    if (state.starred[qId]) delete state.starred[qId];
-    else state.starred[qId] = true;
+    state.autoStarNextAt ||= {};
+
+    const wasStarred = !!state.starred[qId];
+    if (wasStarred) {
+      // Manual unstar: don't auto-star again until the user accumulates 3 MORE fails.
+      delete state.starred[qId];
+      const failCount = getFailCount(qId);
+      state.autoStarNextAt[qId] = failCount + 3;
+    } else {
+      // Manual star.
+      state.starred[qId] = true;
+    }
+
     updateStarButton(qId);
   }
 
@@ -439,6 +475,8 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const doc = await db.collection("progress").doc(user.uid).get();
       state = doc.exists ? normalizeState(doc.data()) : normalizeState(state);
+      // Rebuild derived counters (so auto-star works even for old saved states).
+      rebuildFailCountsFromHistory();
     } catch (e) {
       console.error("Error loading progress:", e);
       if (e?.code === "permission-denied") {
@@ -802,6 +840,21 @@ document.addEventListener("DOMContentLoaded", () => {
       state.demotedFailed[qId] = true;
     }
 
+    // ===== Auto-star when a question is failed 3 times (not necessarily consecutive).
+    // If the user manually unstars it, we won't auto-star again until 3 MORE fails happen.
+    state.failCounts ||= {};
+    state.autoStarNextAt ||= {};
+    if (selected !== correct) {
+      state.failCounts[qId] = (state.failCounts[qId] || 0) + 1;
+      const failCount = state.failCounts[qId];
+      const nextAt = getNextAutoStarAt(qId);
+      if (failCount >= nextAt && !(state.starred && state.starred[qId])) {
+        state.starred ||= {};
+        state.starred[qId] = true;
+        updateStarButton(qId);
+      }
+    }
+
     state.attempts[qId] = (state.attempts[qId] || 0) + 1;
     nextBtn.disabled = false;
 
@@ -850,6 +903,90 @@ document.addEventListener("DOMContentLoaded", () => {
     if (user) await saveProgress(user);
   };
 
+
+  // ================= SHORTCUTS (keyboard + touch) =================
+  function isTypingInInput(target) {
+    const el = target;
+    if (!el) return false;
+    const tag = (el.tagName || "").toLowerCase();
+    return tag === "input" || tag === "textarea" || el.isContentEditable;
+  }
+
+  // Keyboard: Enter = next (if enabled)
+  // A/B/C/D = pick option (if not answered yet)
+  document.addEventListener("keydown", (ev) => {
+    if (isTypingInInput(ev.target)) return;
+    if (testEl.style.display !== "block") return;
+
+    const key = String(ev.key || "").toLowerCase();
+
+    // Enter -> next
+    if (key === "enter") {
+      if (!nextBtn.disabled) {
+        ev.preventDefault();
+        nextBtn.click();
+      }
+      return;
+    }
+
+    // A/B/C/D -> select option (only if still answering)
+    if (key === "a" || key === "b" || key === "c" || key === "d") {
+      if (currentMode === "LEARNED") return;
+      if (!nextBtn.disabled) return; // already answered
+      const btn = optionsEl.querySelector(`button[data-letter="${key.toUpperCase()}"]`);
+      if (btn && !btn.disabled) {
+        ev.preventDefault();
+        btn.click();
+      }
+    }
+  });
+
+  // Touch swipe on test screen:
+  // - Swipe RIGHT -> LEFT  => Next (if enabled)
+  // - Swipe LEFT  -> RIGHT => Back to menu
+  (function initSwipeShortcuts() {
+    let startX = 0;
+    let startY = 0;
+    let startT = 0;
+
+    const SWIPE_MIN_X = 55;  // px
+    const SWIPE_MAX_Y = 45;  // px
+    const SWIPE_MAX_TIME = 900; // ms
+
+    testEl.addEventListener("touchstart", (e) => {
+      const t = e.touches && e.touches[0];
+      if (!t) return;
+      startX = t.clientX;
+      startY = t.clientY;
+      startT = Date.now();
+    }, { passive: true });
+
+    testEl.addEventListener("touchend", (e) => {
+      if (testEl.style.display !== "block") return;
+      const t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      const dt = Date.now() - startT;
+
+      if (dt > SWIPE_MAX_TIME) return;
+      if (Math.abs(dx) < SWIPE_MIN_X) return;
+      if (Math.abs(dy) > SWIPE_MAX_Y) return;
+      if (Math.abs(dx) < Math.abs(dy) * 1.2) return; // mostly horizontal
+
+      // RIGHT -> LEFT (dx negative) => Next
+      if (dx < 0) {
+        if (!nextBtn.disabled) nextBtn.click();
+        return;
+      }
+
+      // LEFT -> RIGHT => Menu
+      if (dx > 0) {
+        if (backToMenuBtn) backToMenuBtn.click();
+      }
+    }, { passive: true });
+  })();
   // ================= AUTH STATE =================
   auth.onAuthStateChanged(async user => {
     if (!user) {
