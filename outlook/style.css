@@ -15,11 +15,10 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color: var(--text);
-  background:
-    radial-gradient(1200px 800px at 15% 10%, rgba(43, 124, 255, 0.28), transpar$
-    radial-gradient(900px 700px at 90% 20%, rgba(0, 86, 179, 0.26), transparent$
-    radial-gradient(800px 700px at 40% 95%, rgba(120, 200, 255, 0.18), transpar$
-    var(--bg);
+  background: radial-gradient(1200px 800px at 15% 10%, rgba(43, 124, 255, 0.28), transpar$
+              radial-gradient(900px 700px at 90% 20%, rgba(0, 86, 179, 0.26), transparent$
+              radial-gradient(800px 700px at 40% 95%, rgba(120, 200, 255, 0.18), transpar$
+              var(--bg);
   min-height: 100vh;
   padding: 18px; 
 }
