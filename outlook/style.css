@@ -1,7 +1,7 @@
 :root {
-  --bg: #0b2347; /* Azul marino estilo Word */
-  --panel: rgba(255, 255, 255, 0.07);
-  --stroke: rgba(255, 255, 255, 0.12);
+  --bg: #1a3a2a; /* Fondo verde oscuro */
+  --panel: rgba(255, 255, 255, 0.06);
+  --stroke: rgba(255, 255, 255, 0.10);
   --text: rgba(255, 255, 255, 0.92);
   --shadow: 0 16px 50px rgba(0, 0, 0, 0.45);
   --radius: 16px;
@@ -15,11 +15,10 @@ body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   color: var(--text);
-  background:
-    radial-gradient(1200px 800px at 15% 10%, rgba(43, 124, 255, 0.28), transparent 60%),
-    radial-gradient(900px 700px at 90% 20%, rgba(0, 86, 179, 0.26), transparent 55%),
-    radial-gradient(800px 700px at 40% 95%, rgba(120, 200, 255, 0.18), transparent 55%),
-    var(--bg);
+  background: radial-gradient(1200px 800px at 15% 10%, rgba(34, 193, 195, 0.35), transparent 60%), 
+              radial-gradient(900px 700px at 90% 20%, rgba(40, 180, 99, 0.28), transparent 55%), 
+              radial-gradient(800px 700px at 40% 95%, rgba(107, 204, 85, 0.20), transparent 55%), 
+              var(--bg);
   min-height: 100vh;
   padding: 18px;
 }
@@ -128,7 +127,7 @@ button:disabled {
 /* ===== Menú por bloque ===== */
 .block-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto auto;
+  grid-template-columns: 1fr auto auto auto auto auto;
   gap: 10px;
   align-items: center;
   margin: 10px 0;
@@ -194,6 +193,41 @@ button:disabled {
   .block-percent {
     grid-column: 1 / -1;
     justify-self: start;
+  }
+}
+
+
+/* ===== Ajuste móvil: evitar desencuadres en botones largos ===== */
+@media (max-width: 520px) {
+  .block-row {
+    grid-template-columns: 1fr;   /* 1 columna */
+    gap: 8px;
+  }
+
+  /* Que cada elemento ocupe todo el ancho */
+  .block-row > * {
+    width: 100%;
+  }
+
+  /* El % no necesita min-width en móvil */
+  .block-percent {
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  /* Permitir que el texto se parta en 2 líneas */
+  .block-mini,
+  .block-reset {
+    white-space: normal;   /* sobrescribe el nowrap */
+    line-height: 1.15;
+  }
+
+  /* Un pelín más compacto */
+  .block-mini,
+  .block-reset,
+  .block-main {
+    padding: 10px 12px;
+    font-size: 14px;
   }
 }
 
@@ -453,4 +487,22 @@ button.incorrect {
 
 .legal-back a:hover {
   text-decoration: underline;
+}
+/* ===== Return-to-menu highlight (10s) ===== */
+.menu-return-highlight {
+  position: relative;
+  outline: 2px solid rgba(252, 211, 77, 0.95);
+  box-shadow: 0 0 0 4px rgba(252, 211, 77, 0.18), 0 0 18px rgba(252, 211, 77, 0.35);
+  animation: menuReturnPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes menuReturnPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(252, 211, 77, 0.14), 0 0 14px rgba(252, 211, 77, 0.25);
+    transform: translateY(0);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(252, 211, 77, 0.22), 0 0 22px rgba(252, 211, 77, 0.45);
+    transform: translateY(-1px);
+  }
 }
